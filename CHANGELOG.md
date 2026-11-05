@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 ### Added
 
 - Add CONTRIBUTING and CHANGELOG, from [@hansenkyle]
+- Add PR and Issue templates, from [@nglaser3]
 
 ### Changed
 
@@ -22,3 +23,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 [Unreleased]: https://github.com/CARRE-PSAAP/MEDEA
 [@hansenkyle]: https://github.com/hansenkyle
+[@nglaser3]: https://github.com/nglaser3
