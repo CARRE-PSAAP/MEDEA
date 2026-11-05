@@ -1,0 +1,16 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12", "mfem>=4.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "medea"
+version = "0.0.0"
+description = "Tools for solving particle transport problems using MFEM"
+requires-python = ">=3.11"
+dependencies = ["mfem>=4.10"]
+
+[tool.scikit-build]
+wheel.packages = ["python/medea"]
+cmake.build-type = "Release"
+build-dir = "build/{wheel_tag}"
+editable.mode = "redirect"
