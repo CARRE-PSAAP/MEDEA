@@ -1,75 +1,75 @@
 cmake_minimum_required(VERSION 3.18)
 project(medea LANGUAGES CXX)
-
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- MFEM flavour: "ser" or "par" (matches PyMFEM's mfem.ser / mfem.par) ----
-set(MEDEA_MFEM_MODE "ser" CACHE STRING "PyMFEM build to link against: ser or par")
-if(DEFINED ENV{MEDEA_MFEM_MODE} AND NOT "$ENV{MEDEA_MFEM_MODE}" STREQUAL "")
-  set(MEDEA_MFEM_MODE "$ENV{MEDEA_MFEM_MODE}")
+# ---------------------------------------------------------------------------
+# 1. Which PyMFEM build to use: "ser" (serial) or "par" (MPI).
+#    Set with the environment variable MEDEA_MFEM_MODE, or with
+#    pip's -Ccmake.define.MEDEA_MFEM_MODE=par
+# ---------------------------------------------------------------------------
+set(MEDEA_MFEM_MODE "ser" CACHE STRING "PyMFEM build to link: ser or par")
+if(DEFINED ENV{MEDEA_MFEM_MODE})
+  set(MEDEA_MFEM_MODE $ENV{MEDEA_MFEM_MODE})
 endif()
-set_property(CACHE MEDEA_MFEM_MODE PROPERTY STRINGS ser par)
-if(NOT MEDEA_MFEM_MODE MATCHES "^(ser|par)$")
-  message(FATAL_ERROR "MEDEA_MFEM_MODE must be 'ser' or 'par', got '${MEDEA_MFEM_MODE}'")
+if(NOT MEDEA_MFEM_MODE STREQUAL "ser" AND NOT MEDEA_MFEM_MODE STREQUAL "par")
+  message(FATAL_ERROR "MEDEA_MFEM_MODE must be 'ser' or 'par'")
 endif()
 
-# --- Locate the MFEM shipped inside the installed PyMFEM ---------------------
+# ---------------------------------------------------------------------------
+# 2. Find the MFEM that ships inside the installed PyMFEM package, i.e.
+#    <site-packages>/mfem/external/<mode>/{include,lib}.
+#    Set MEDEA_MFEM_ROOT to use a different MFEM instead.
+# ---------------------------------------------------------------------------
 find_package(Python 3.11 REQUIRED COMPONENTS Interpreter Development.Module)
-set(MEDEA_MFEM_ROOT "" CACHE PATH "Override: directory containing include/ and lib/ of MFEM")
 
+set(MEDEA_MFEM_ROOT "" CACHE PATH "Optional: MFEM directory with include/ and lib/")
 if(NOT MEDEA_MFEM_ROOT)
+  # Ask Python where the 'mfem' package lives (without importing it).
+  set(find_mfem "import importlib.util as u; print(u.find_spec('mfem').submodule_search_locations[0])")
   execute_process(
-    COMMAND "${Python_EXECUTABLE}" -c "import importlib.util, os, sys; s = importlib.util.find_spec('mfem'); print(os.path.dirname(s.origin)) if s else sys.exit(1)"
-    OUTPUT_VARIABLE _mfem_pkg OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _rc)
-  if(NOT _rc EQUAL 0)
-    message(FATAL_ERROR
-      "PyMFEM ('mfem') is not importable by ${Python_EXECUTABLE}. Install it first "
-      "and build with --no-build-isolation, or set -DMEDEA_MFEM_ROOT=<path>.")
+    COMMAND ${Python_EXECUTABLE} -c "${find_mfem}"
+    OUTPUT_VARIABLE mfem_package
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE python_status)
+  if(NOT python_status EQUAL 0)
+    message(FATAL_ERROR "PyMFEM is not installed. Install it first and use --no-build-isolation.")
   endif()
-  set(MEDEA_MFEM_ROOT "${_mfem_pkg}/external/${MEDEA_MFEM_MODE}")
+  set(MEDEA_MFEM_ROOT ${mfem_package}/external/${MEDEA_MFEM_MODE})
 endif()
 
-if(NOT EXISTS "${MEDEA_MFEM_ROOT}/include/mfem.hpp")
-  message(FATAL_ERROR
-    "No MFEM '${MEDEA_MFEM_MODE}' build found at ${MEDEA_MFEM_ROOT}.\n"
-    "The installed PyMFEM may be the other flavour. For 'par', PyMFEM must be built "
-    "from source with --with-parallel (see README).")
+if(NOT EXISTS ${MEDEA_MFEM_ROOT}/include/mfem.hpp)
+  message(FATAL_ERROR "No '${MEDEA_MFEM_MODE}' MFEM found in ${MEDEA_MFEM_ROOT}. "
+                      "Parallel needs a PyMFEM built from source (see README).")
 endif()
-message(STATUS "MEDEA: using MFEM (${MEDEA_MFEM_MODE}) at ${MEDEA_MFEM_ROOT}")
+message(STATUS "MEDEA: using ${MEDEA_MFEM_MODE} MFEM from ${MEDEA_MFEM_ROOT}")
 
-unset(MEDEA_MFEM_LIB CACHE)  # don't reuse a path cached from another environment
-find_library(MEDEA_MFEM_LIB NAMES mfem PATHS "${MEDEA_MFEM_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+set(mfem_include_dirs ${MEDEA_MFEM_ROOT}/include)
+set(mfem_lib_dirs     ${MEDEA_MFEM_ROOT}/lib)
+set(mfem_libs         mfem)
 
-add_library(mfem_imported SHARED IMPORTED)
-set_target_properties(mfem_imported PROPERTIES
-  IMPORTED_LOCATION "${MEDEA_MFEM_LIB}"
-  INTERFACE_INCLUDE_DIRECTORIES "${MEDEA_MFEM_ROOT}/include")
-set(MEDEA_RPATH "${MEDEA_MFEM_ROOT}/lib")
+# The parallel build also needs MPI, plus hypre and METIS, which PyMFEM
+# installs one level up, in <mfem>/external/{include,lib}.
 if(MEDEA_MFEM_MODE STREQUAL "par")
-  # A source-built PyMFEM installs hypre and METIS in the shared <mfem>/external/{include,lib}.
-  get_filename_component(_ext "${MEDEA_MFEM_ROOT}/.." ABSOLUTE)
-  foreach(_lib HYPRE metis)
-    unset(MEDEA_${_lib}_LIB CACHE)
-    find_library(MEDEA_${_lib}_LIB NAMES ${_lib} PATHS "${_ext}/lib" NO_DEFAULT_PATH REQUIRED)
-    set_property(TARGET mfem_imported APPEND PROPERTY INTERFACE_LINK_LIBRARIES "${MEDEA_${_lib}_LIB}")
-  endforeach()
-  set_property(TARGET mfem_imported APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${_ext}/include")
-  list(APPEND MEDEA_RPATH "${_ext}/lib")
   find_package(MPI REQUIRED COMPONENTS CXX)
-  set_property(TARGET mfem_imported APPEND PROPERTY INTERFACE_LINK_LIBRARIES MPI::MPI_CXX)
+  list(APPEND mfem_include_dirs ${MEDEA_MFEM_ROOT}/../include)
+  list(APPEND mfem_lib_dirs     ${MEDEA_MFEM_ROOT}/../lib)
+  list(APPEND mfem_libs         HYPRE metis MPI::MPI_CXX)
 endif()
 
-# --- Extension module --------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. The Python extension module: medea._core
+# ---------------------------------------------------------------------------
 find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(_core src/bindings.cpp src/hello_mfem.cpp)
-target_link_libraries(_core PRIVATE mfem_imported)
+
+target_include_directories(_core PRIVATE ${mfem_include_dirs})
+target_link_directories(_core PRIVATE ${mfem_lib_dirs})
+target_link_libraries(_core PRIVATE ${mfem_libs})
 target_compile_definitions(_core PRIVATE MEDEA_MFEM_MODE="${MEDEA_MFEM_MODE}")
 
-# Find PyMFEM's libmfem at runtime instead of baking in a build-machine path
-# (the wheel's libmfem lives at <site-packages>/mfem/external/<mode>/lib).
+# Tell the module where to find MFEM's .so files when Python imports it.
 set_target_properties(_core PROPERTIES
   BUILD_WITH_INSTALL_RPATH ON
-  INSTALL_RPATH "${MEDEA_RPATH}")
+  INSTALL_RPATH "${mfem_lib_dirs}")
 
 install(TARGETS _core DESTINATION medea)
