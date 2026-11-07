@@ -30,9 +30,12 @@ if(NOT MEDEA_MFEM_ROOT)
     COMMAND ${Python_EXECUTABLE} -c "${find_mfem}"
     OUTPUT_VARIABLE mfem_package
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
     RESULT_VARIABLE python_status)
   if(NOT python_status EQUAL 0)
-    message(FATAL_ERROR "PyMFEM is not installed. Install it first and use --no-build-isolation.")
+    message(FATAL_ERROR
+      "Cannot import PyMFEM. Run 'pip install mfem scikit-build-core pybind11 ninja', "
+      "then 'pip install -e . --no-build-isolation'. See the README.")
   endif()
   set(MEDEA_MFEM_ROOT ${mfem_package}/external/${MEDEA_MFEM_MODE})
 endif()
