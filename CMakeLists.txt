@@ -38,13 +38,24 @@ if(NOT EXISTS "${MEDEA_MFEM_ROOT}/include/mfem.hpp")
 endif()
 message(STATUS "MEDEA: using MFEM (${MEDEA_MFEM_MODE}) at ${MEDEA_MFEM_ROOT}")
 
+unset(MEDEA_MFEM_LIB CACHE)  # don't reuse a path cached from another environment
 find_library(MEDEA_MFEM_LIB NAMES mfem PATHS "${MEDEA_MFEM_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
 
 add_library(mfem_imported SHARED IMPORTED)
 set_target_properties(mfem_imported PROPERTIES
   IMPORTED_LOCATION "${MEDEA_MFEM_LIB}"
   INTERFACE_INCLUDE_DIRECTORIES "${MEDEA_MFEM_ROOT}/include")
+set(MEDEA_RPATH "${MEDEA_MFEM_ROOT}/lib")
 if(MEDEA_MFEM_MODE STREQUAL "par")
+  # A source-built PyMFEM installs hypre and METIS in the shared <mfem>/external/{include,lib}.
+  get_filename_component(_ext "${MEDEA_MFEM_ROOT}/.." ABSOLUTE)
+  foreach(_lib HYPRE metis)
+    unset(MEDEA_${_lib}_LIB CACHE)
+    find_library(MEDEA_${_lib}_LIB NAMES ${_lib} PATHS "${_ext}/lib" NO_DEFAULT_PATH REQUIRED)
+    set_property(TARGET mfem_imported APPEND PROPERTY INTERFACE_LINK_LIBRARIES "${MEDEA_${_lib}_LIB}")
+  endforeach()
+  set_property(TARGET mfem_imported APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${_ext}/include")
+  list(APPEND MEDEA_RPATH "${_ext}/lib")
   find_package(MPI REQUIRED COMPONENTS CXX)
   set_property(TARGET mfem_imported APPEND PROPERTY INTERFACE_LINK_LIBRARIES MPI::MPI_CXX)
 endif()
@@ -59,6 +70,6 @@ target_compile_definitions(_core PRIVATE MEDEA_MFEM_MODE="${MEDEA_MFEM_MODE}")
 # (the wheel's libmfem lives at <site-packages>/mfem/external/<mode>/lib).
 set_target_properties(_core PROPERTIES
   BUILD_WITH_INSTALL_RPATH ON
-  INSTALL_RPATH "${MEDEA_MFEM_ROOT}/lib")
+  INSTALL_RPATH "${MEDEA_RPATH}")
 
 install(TARGETS _core DESTINATION medea)
