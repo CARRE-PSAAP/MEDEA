@@ -38,6 +38,12 @@ gh pr create
 
 then follow the prompts.
 
+## Code Format and Style
+
+Python code uses the `black` style. Run `black .` from project root to format your code before commiting.
+
+C++ code uses the `Google` style, and uses `clang-format` to perform the formatting. Run `clang-format -i <file.h> <file.cpp>` to format your code before commiting.
+
 ## Versioning
 
 MEDEA uses [semantic versioning](https://semver.org/#semantic-versioning-200). When changes are merged into `main` from `dev`, this increments the code version, which is numbered MAJOR.MINOR.PATCH:
