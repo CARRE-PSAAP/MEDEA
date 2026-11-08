@@ -15,6 +15,7 @@ test = ["pytest"]
 # Parallel PyMFEM cannot be requested through pip extras; it is a source build.
 # See README for instructions. mpi4py is needed at runtime in that case.
 parallel = ["mpi4py"]
+docs = ["sphinx", "breathe", "sphinx-rtd-theme"]
 
 [tool.scikit-build]
 wheel.packages = ["medea"]
