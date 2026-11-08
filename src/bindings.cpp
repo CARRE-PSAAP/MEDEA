@@ -15,6 +15,7 @@ PYBIND11_MODULE(_core, m) {
       .def_readonly("num_dofs", &medea::HelloResult::num_dofs)
       .def_readonly("integral", &medea::HelloResult::integral);
 
-  m.def("hello_mfem", &medea::hello_mfem, py::arg("n") = 4, py::arg("order") = 2,
+  m.def("hello_mfem", &medea::hello_mfem, py::arg("n") = 4,
+        py::arg("order") = 2,
         "Build an n x n unit-square mesh with an H1 space and integrate f=1.");
 }

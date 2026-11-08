@@ -7,9 +7,11 @@
 namespace medea {
 
 HelloResult hello_mfem(int n, int order) {
-  if (n < 1 || order < 1) throw std::invalid_argument("n and order must be >= 1");
+  if (n < 1 || order < 1)
+    throw std::invalid_argument("n and order must be >= 1");
 
-  mfem::Mesh mesh = mfem::Mesh::MakeCartesian2D(n, n, mfem::Element::QUADRILATERAL);
+  mfem::Mesh mesh =
+      mfem::Mesh::MakeCartesian2D(n, n, mfem::Element::QUADRILATERAL);
   mfem::H1_FECollection fec(order, mesh.Dimension());
   mfem::FiniteElementSpace fes(&mesh, &fec);
 
