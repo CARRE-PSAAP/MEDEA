@@ -1,7 +1,7 @@
 # MEDEA
 
-Deterministic solver for charged particle transport problems, built on
-[MFEM](https://mfem.org) (via PyMFEM) and intended for integration with MC/DC.
+**Me**thods for **D**eterministic **E**lectronics transport **A**nalysis: Deterministic solver for charged particle transport problems, intended for integration with MC/DC.
+
 
 ## Install
 
@@ -52,3 +52,7 @@ doxygen Doxyfile
 make html
 open build/html/index.html
 ```
+## Contributing
+
+See [CONTRIBUTING](/CONTRIBUTING.md) for guidelines on contributing to the project.
+
