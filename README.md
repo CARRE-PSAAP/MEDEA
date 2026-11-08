@@ -23,10 +23,12 @@ pytest && python examples/hello_mfem.py
 PyPI's PyMFEM wheels are serial only, so parallel PyMFEM is built from source
 (slow: compiles MFEM, hypre, METIS). Needs an MPI install (`mpicxx`) and cmake;
 the script pulls in `swig`, `mpi4py` and the rest.
+
 ```bash
 source .venv/bin/activate
 scripts/install_parallel.sh --dev                # --dev = editable install
 ```
+
 It is equivalent to PyMFEM's `pip install ./ -C"with-parallel=Yes"`, followed by
 `MEDEA_MFEM_MODE=par pip install -e . --no-build-isolation`. On a cluster, load
 your MPI module first. Check the result with `medea.MFEM_MODE` (`"ser"`/`"par"`).
