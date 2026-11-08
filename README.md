@@ -5,24 +5,27 @@
 
 ## Install
 
-Requires Python >= 3.11. MEDEA links against the MFEM that ships inside
-[PyMFEM](https://github.com/mfem/PyMFEM), so PyMFEM is installed first and the
-build is not isolated.
+Requires Python >= 3.11, plus a C++17 compiler and cmake: `pip` builds MEDEA's
+small compiled extension (`medea._kernels`). That extension works on plain NumPy
+arrays and does not link MFEM or MPI, so it needs no PyMFEM at build time and
+the same build serves serial and parallel runs.
 
 ### Serial (default)
 
+PyMFEM provides wheels on PyPI for serial MFEM, so a serial build can simply done with `pip install`:
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install mfem scikit-build-core pybind11
-pip install -e .[test] --no-build-isolation      # drop -e for a regular install
+pip install -e .[dev]                            # drop -e for a regular install
 pytest && python examples/hello_mfem.py
 ```
 
 ### Parallel (MPI)
 
-PyPI's PyMFEM wheels are serial only, so parallel PyMFEM is built from source
-(slow: compiles MFEM, hypre, METIS). Needs an MPI install (`mpicxx`) and cmake;
-the script pulls in `swig`, `mpi4py` and the rest.
+Parallel PyMFEM requires a manual build on your machine, it will take significantly
+longer than the serial installation. MPI and Cmake are required for parallel build.
+
+Build parallel PyMFEM and install MEDEA all at once using the parallel install script:
 
 ```bash
 source .venv/bin/activate
@@ -30,11 +33,30 @@ scripts/install_parallel.sh --dev                # --dev = editable install
 ```
 
 It is equivalent to PyMFEM's `pip install ./ -C"with-parallel=Yes"`, followed by
-`MEDEA_MFEM_MODE=par pip install -e . --no-build-isolation`. On a cluster, load
-your MPI module first. Check the result with `medea.MFEM_MODE` (`"ser"`/`"par"`).
+`pip install -e .[parallel]`. On a cluster, load your MPI module first.
 
-To use an existing MFEM, pass `-Ccmake.define.MEDEA_MFEM_ROOT=<dir>` (a directory
-with `include/` and `lib/`). After editing C++ in `src/`, re-run the install command.
+Test and try the parallel build (needs `pytest` and `pytest-mpi`):
+
+```bash
+scripts/test_parallel.sh                           # suite on 1 rank, then on 2 (NP=2)
+mpiexec -n 2 python examples/hello_mfem.py         # a mesh split over 2 ranks
+```
+
+#### Reusing a parallel PyMFEM build
+
+Build the PyMFEM wheel once, then install it into other environments (same
+Python version, platform, and MPI) instead of recompiling:
+
+```bash
+pip wheel mfem --no-binary mfem --no-build-isolation -C"with-parallel=Yes" \
+    --no-deps -w wheelhouse/
+pip install wheelhouse/mfem-*.whl mpi4py
+pip install -e .[parallel]
+```
+
+Install `mpi4py` against the same MPI that built the wheel. A later
+`pip install -U mfem` can replace it with the serial PyPI wheel; check
+`medea.MFEM_MODE` if parallel runs unexpectedly go serial.
 
 ## Build documentation
 
