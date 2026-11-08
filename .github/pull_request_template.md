@@ -24,6 +24,7 @@
 - [ ] I have updated `CHANGELOG.md` as needed. <!-- Delete if not applicable -->
 - [ ] I have added or updated tests to cover my changes. <!-- Delete if not applicable -->
 - [ ] All new and existing tests pass
+- [ ] I have performed a self-review of my code
 
 ## Associated Issues and PRs
 <!--
