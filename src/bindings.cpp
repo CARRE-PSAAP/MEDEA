@@ -1,6 +1,6 @@
 #include <pybind11/pybind11.h>
 
-#include "hello_mfem.hpp"
+#include "hello_mfem.h"
 
 namespace py = pybind11;
 

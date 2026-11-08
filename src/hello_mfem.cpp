@@ -1,4 +1,4 @@
-#include "hello_mfem.hpp"
+#include "hello_mfem.h"
 
 #include <stdexcept>
 
