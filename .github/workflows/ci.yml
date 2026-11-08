@@ -13,3 +13,23 @@ jobs:
       - run: pip install mfem scikit-build-core pybind11 ninja pytest
       - run: pip install -e . --no-build-isolation
       - run: pytest .
+
+name: Clang Format Check
+
+on:
+  [push, pull_request]
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Clang Format Linter
+        uses: RafikFarhad/clang-format-github-action@v6
+        with:
+          # Select which files/folders to lint
+          sources: "src/**/*.h,src/**/*.cpp,include/**/*.h"
+          # Select formatting style (file reads your local .clang-format)
+          style: "file" 
