@@ -1,22 +1,20 @@
-"""Choose PyMFEM's serial or parallel module, once per process.
+"""
+Loads parallel or serial mfem, depending on which is installed, and provides
+wrappers for MPI.
 
-Usage: in the rest of the code, import mfem using ``from medea._backend import mfem``.
-This will automaticall import either serial or parallel, whichever is available.
+To load PyMFEM in MEDEA modules, use ``from medea._backend import mfem``.
 
-Check mode using ``is_parallel`` or ``MFEM_MODE``, and use ``comm``, ``rank()``, and 
-``size()`` for MPI parameters.
+To access MPI, use ``from medea._backend import comm``. Use helper function
+``is_parallel()`` to determine if code is being executed using MPI. Use
+``rank()`` and ``size()`` to get MPI world parameters.
 
-Selection, in order:
+Notes: 
 
 1. If something already imported one of them, that one is used (and a
    conflicting ``MEDEA_BACKEND`` is an error).
 2. ``MEDEA_BACKEND=ser`` or ``par`` forces a mode. Forcing ``par`` when no
    parallel PyMFEM is installed is an error.
 3. Otherwise ("auto"): parallel if a parallel PyMFEM is installed, else serial.
-
-There is deliberately no silent fallback: if a parallel PyMFEM is installed but
-fails to import (missing ``mpi4py``, a broken MPI), the ImportError is raised
-instead of quietly running serial. Set ``MEDEA_BACKEND=ser`` to opt out.
 """
 
 import importlib
@@ -31,9 +29,7 @@ _VALID = ("auto", "ser", "par")
 def _parallel_installed():
     """True if this PyMFEM was built with parallel support.
 
-    A parallel build ships its libraries in ``mfem/external/par``. (The serial
-    PyPI wheel also contains a ``mfem/par.py`` stub, so its presence says
-    nothing.)
+    A parallel build ships its libraries in ``mfem/external/par``.
     """
     return (Path(_mfem_pkg.__file__).parent / "external" / "par").is_dir()
 
