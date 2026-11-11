@@ -5,12 +5,15 @@ API
 C++ API Reference Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. doxygenclass:: medea::HelloResult
+.. doxygenfunction:: medea::sweep_toy
    :project: MEDEA
-   :members:
-   :private-members:
 
 Python API Reference Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autofunction:: medea.hello_mfem
+
+.. autoclass:: medea.HelloResult
+   :members:
+
+.. autofunction:: medea.sweep_toy

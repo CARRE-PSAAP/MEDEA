@@ -8,7 +8,7 @@ To access MPI, use ``from medea._backend import comm``. Use helper function
 ``is_parallel()`` to determine if code is being executed using MPI. Use
 ``rank()`` and ``size()`` to get MPI world parameters.
 
-Notes: 
+Notes:
 
 1. If something already imported one of them, that one is used (and a
    conflicting ``MEDEA_BACKEND`` is an error).
