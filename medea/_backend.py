@@ -3,7 +3,7 @@
 Usage: in the rest of the code, import mfem using ``from medea._backend import mfem``.
 This will automaticall import either serial or parallel, whichever is available.
 
-Check mode using ``is_parallel`` or ``MFEM_MODE``, and use ``rank()`` and 
+Check mode using ``is_parallel`` or ``MFEM_MODE``, and use ``comm``, ``rank()``, and 
 ``size()`` for MPI parameters.
 
 Selection, in order:
