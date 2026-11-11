@@ -22,8 +22,7 @@ pytest && python examples/hello_mfem.py
 
 ### Parallel (MPI)
 
-Parallel PyMFEM requires a manual build on your machine, it will take significantly
-longer than the serial installation. MPI and Cmake are required for parallel build.
+Parallel PyMFEM requires a manual build on your machine, which requires MPI and Cmake.
 
 Build parallel PyMFEM and install MEDEA all at once using the parallel install script:
 
@@ -33,36 +32,18 @@ scripts/install_parallel.sh --dev                # --dev = editable install
 ```
 
 It is equivalent to PyMFEM's `pip install ./ -C"with-parallel=Yes"`, followed by
-`pip install -e .[parallel]`. On a cluster, load your MPI module first.
+`pip install -e .[parallel]`.
 
 Test and try the parallel build (needs `pytest` and `pytest-mpi`):
 
 ```bash
 scripts/test_parallel.sh                           # suite on 1 rank, then on 2 (NP=2)
-mpiexec -n 2 python examples/hello_mfem.py         # a mesh split over 2 ranks
+mpirun -n 2 python examples/hello_mfem.py          # a mesh split over 2 ranks
 ```
-
-#### Reusing a parallel PyMFEM build
-
-Build the PyMFEM wheel once, then install it into other environments (same
-Python version, platform, and MPI) instead of recompiling:
-
-```bash
-pip wheel mfem --no-binary mfem --no-build-isolation -C"with-parallel=Yes" \
-    --no-deps -w wheelhouse/
-pip install wheelhouse/mfem-*.whl mpi4py
-pip install -e .[parallel]
-```
-
-Install `mpi4py` against the same MPI that built the wheel. A later
-`pip install -U mfem` can replace it with the serial PyPI wheel; check
-`medea.MFEM_MODE` if parallel runs unexpectedly go serial.
 
 ## Build documentation
 
-To build documentation, you must have `doxygen` installed on your machine, and `sphinx`, `breathe`, and `sphinx-rtd-theme` installed in your Python environment.
-
-To satisfy the python requirements, you can install MEDEA with the optional "docs" dependencies:
+To satisfy the documentation build requirements, install MEDEA with the optional "docs" dependencies:
 
 ```bash
 pip install -e .[docs] --no-build-isolation
@@ -76,6 +57,7 @@ doxygen Doxyfile
 make html
 open build/html/index.html
 ```
+
 ## Contributing
 
 See [CONTRIBUTING](/CONTRIBUTING.md) for guidelines on contributing to the project.
