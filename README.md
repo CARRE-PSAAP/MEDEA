@@ -16,8 +16,8 @@ PyMFEM provides wheels on PyPI for serial MFEM, so a serial build can simply don
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .[dev]                            # drop -e for a regular install
-pytest && python examples/hello_mfem.py
+pip install -e ".[dev]"                            # drop -e for a regular install
+python -m pytest && python examples/hello_mfem.py
 ```
 
 ### Parallel (MPI)
