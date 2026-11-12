@@ -1,0 +1,27 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "medea"
+version = "0.0.0"
+description = "Tools for solving particle transport problems using MFEM"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["mfem>=4.10", "numpy", "numba"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-mpi", "black<27"]
+parallel = ["mpi4py", "pytest-mpi"]
+docs = ["sphinx", "breathe", "sphinx-rtd-theme"]
+
+[tool.scikit-build]
+wheel.packages = ["medea"]
+cmake.build-type = "Release"
+build-dir = "build/{wheel_tag}"
+editable.mode = "redirect"
+
+[tool.scikit-build.cmake.define]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

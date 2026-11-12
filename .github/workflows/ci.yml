@@ -1,0 +1,93 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ matrix.python-version }}"}
+      # Serial PyMFEM comes from a PyPI wheel; MEDEA's kernels build in isolation.
+      - run: pip install -e .[dev]
+      - run: pytest
+      # The kernels take plain arrays, so one build must serve serial and parallel.
+      - name: Kernels must not link MFEM or MPI
+        run: |
+          so=$(python -c "import medea._kernels as k; print(k.__file__)")
+          readelf -d "$so" | grep NEEDED
+          if readelf -d "$so" | grep -E "libmfem|libmpi"; then
+            echo "error: $so links MFEM or MPI" >&2
+            exit 1
+          fi
+
+  # Parallel PyMFEM is a source build (MFEM + hypre + METIS), which is slow.
+  # pip stores the built wheel in its cache, so we cache that directory.
+  test-parallel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Runners have few cores; let mpiexec start more ranks than cores.
+      OMPI_MCA_rmaps_base_oversubscribe: "1"
+      # A serial install fails the tests instead of silently skipping them.
+      MEDEA_REQUIRE_PARALLEL: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.14"}
+      - name: Install MPI
+        run: sudo apt-get update && sudo apt-get install -y libopenmpi-dev openmpi-bin
+      - name: Create virtualenv (install_parallel.sh requires one)
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Restore pip cache
+        id: pip-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-par-${{ runner.os }}-py3.14-${{ hashFiles('scripts/install_parallel.sh') }}
+          restore-keys: pip-par-${{ runner.os }}-py3.14-
+      - name: Install parallel MEDEA
+        run: scripts/install_parallel.sh
+      # Save the cache even if later steps fail, but only if the slow MFEM
+      # wheel was actually built (cache keys are immutable once saved).
+      - name: Check for built MFEM wheel
+        if: always() && steps.pip-cache.outputs.cache-hit != 'true'
+        id: mfem-wheel
+        run: |
+          if find ~/.cache/pip -name 'mfem-*.whl' | grep -q .; then
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save pip cache
+        if: always() && steps.mfem-wheel.outputs.built == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ steps.pip-cache.outputs.cache-primary-key }}
+      - run: pip install pytest pytest-mpi
+      # Runs the suite on one rank, then under mpiexec -n 2 with --with-mpi.
+      - run: scripts/test_parallel.sh
+      # A parallel install also contains the serial module: check that mode too.
+      - name: Serial mode inside the parallel install
+        env:
+          MEDEA_BACKEND: ser
+          MEDEA_REQUIRE_PARALLEL: ""
+        run: pytest
+
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Clang Format Linter
+        uses: RafikFarhad/clang-format-github-action@v6
+        with:
+          # Select which files/folders to lint
+          sources: "src/**/*.h,src/**/*.cpp"
+          # Select formatting style (file reads your local .clang-format)
+          style: "file" 

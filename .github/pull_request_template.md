@@ -19,11 +19,12 @@
     Put an `x` in all boxes once completed.
 -->
 
-- [ ] I have read the [contributing guide](https://github.com/CARRE-PSAAP/MEDEA/blob/dev/CONTRIBUTING).
+- [ ] I have read the [contributing guide](https://github.com/CARRE-PSAAP/MEDEA/blob/dev/CONTRIBUTING.md).
 - [ ] I have updated the documentation as needed. <!-- Delete if not applicable -->
 - [ ] I have updated `CHANGELOG.md` as needed. <!-- Delete if not applicable -->
 - [ ] I have added or updated tests to cover my changes. <!-- Delete if not applicable -->
 - [ ] All new and existing tests pass
+- [ ] I have performed a self-review of my code
 
 ## Associated Issues and PRs
 <!--
