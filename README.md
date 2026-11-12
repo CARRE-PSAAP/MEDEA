@@ -41,6 +41,8 @@ scripts/test_parallel.sh                           # suite on 1 rank, then on 2 
 mpirun -n 2 python examples/hello_mfem.py          # a mesh split over 2 ranks
 ```
 
+Note that parallel execution may fail if `PyMFEM` and `MEDEA` were configured to use different MPI implementations (i.e. conda vs. system MPI).
+
 ## Build documentation
 
 To satisfy the documentation build requirements, install MEDEA with the optional "docs" dependencies:
