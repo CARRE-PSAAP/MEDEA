@@ -2,8 +2,10 @@
 Transport sweep scheduling and kernel.
 """
 
-from medea._backend import mfem
 import numpy as np
+import warnings
+
+from medea._backend import mfem
 
 
 class Schedule:
@@ -16,6 +18,15 @@ class Schedule:
     def __init__(self, mesh: mfem.Mesh, angle: mfem.vector):
         # ensure angle and mesh dimension match
         sdim = mesh.SpaceDimension()
+
+        is_curved = mesh.NURBSext is not None
+        nodal_fes = mesh.GetNodalFESpace()
+        if nodal_fes is not None and  nodal_fes.FEColl().GetOrder() > 1:
+            is_curved = True
+
+        if is_curved == True:
+            warnings.warn("Curved meshes not verified", UserWarning)
+    
         if angle.Size() != sdim:
             raise ValueError(
                 f"Invalid dimensions in 'angle' for mesh of dimension {sdim}"
@@ -62,23 +73,20 @@ class Schedule:
         if len(result) != mesh.GetNE():
             raise ValueError("Cycle detected in mesh")
         self.order = result
-    
-    def sweep(self, 
-        bilinear_form : mfem.BilinearForm, 
-        linear_form : mfem.LinearForm
-    ):
+
+    def sweep(self, bilinear_form: mfem.BilinearForm, linear_form: mfem.LinearForm):
         # expects pre-built bilinear form matrix and source matrix
         # writes to 'solution'
 
         fespace = bilinear_form.FESpace()
         element_dofs = []
-        
+
         # # For each element in schedule order:
         for elem in self.order:
             dofs = fespace.GetElementDofs(elem)
             element_dofs.append(dofs)
             # Get dofs; add to list of dofs
-        
+
         solution = np.zeros(fespace.GetNDofs())
 
         M = bilinear_form.SpMat()
@@ -86,8 +94,8 @@ class Schedule:
             cols = mfem.intArray()
             vals = mfem.Vector()
 
-            local_matrix = [[0. for _ in range(len(dofs))] for _ in range(len(dofs))]
-            incoming_source = [0. for _ in range(len(dofs))]
+            local_matrix = [[0.0 for _ in range(len(dofs))] for _ in range(len(dofs))]
+            incoming_source = [0.0 for _ in range(len(dofs))]
 
             for index, d in enumerate(dofs):
                 # get rows of bilinear form
@@ -98,10 +106,10 @@ class Schedule:
                 for i in range(len(listcols)):
                     if listcols[i] in dofs:
                         local_matrix[index][dofs.index(listcols[i])] = listvals[i]
-                    else: 
+                    else:
                         incoming_source[index] -= listvals[i] * solution[listcols[i]]
-            
+
             a = np.array(linear_form.GetDataArray()[dofs]) + np.array(incoming_source)
-            u =np.linalg.solve(np.array(local_matrix), a)
+            u = np.linalg.solve(np.array(local_matrix), a)
             solution[dofs] = u
         return mfem.Vector(solution)
