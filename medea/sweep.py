@@ -3,6 +3,7 @@ Transport sweep scheduling and kernel.
 """
 
 from medea._backend import mfem
+import numpy as np
 
 
 class Schedule:
@@ -58,4 +59,49 @@ class Schedule:
                 if in_degree[c] == 0:
                     queue.append(c)
             result.append(ind)
+        if len(result) != mesh.GetNE():
+            return ValueError("Cycle detected in mesh")
         self.order = result
+    
+    def sweep(self, 
+        bilinear_form : mfem.BilinearForm, 
+        linear_form : mfem.LinearForm
+    ):
+        # expects pre-built bilinear form matrix and source matrix
+        # writes to 'solution'
+
+        fespace = bilinear_form.FESpace()
+        element_dofs = []
+        
+        # # For each element in schedule order:
+        for elem in self.order:
+            dofs = fespace.GetElementDofs(elem)
+            element_dofs.append(dofs)
+            # Get dofs; add to list of dofs
+        
+        solution = np.zeros(fespace.GetNDofs())
+
+        M = bilinear_form.SpMat()
+        for dofs in element_dofs:
+            cols = mfem.intArray()
+            vals = mfem.Vector()
+
+            local_matrix = [[0. for _ in range(len(dofs))] for _ in range(len(dofs))]
+            incoming_source = [0. for _ in range(len(dofs))]
+
+            for index, d in enumerate(dofs):
+                # get rows of bilinear form
+                M.GetRow(d, cols, vals)
+                listcols = cols.GetDataArray()
+                listvals = vals.GetDataArray()
+
+                for i in range(len(listcols)):
+                    if listcols[i] in dofs:
+                        local_matrix[index][dofs.index(listcols[i])] = listvals[i]
+                    else: 
+                        incoming_source[index] -= listvals[i] * solution[listcols[i]]
+            
+            a = np.array(linear_form.GetDataArray()[dofs]) + np.array(incoming_source)
+            u =np.linalg.solve(np.array(local_matrix), a)
+            solution[dofs] = u
+        return mfem.Vector(solution)
