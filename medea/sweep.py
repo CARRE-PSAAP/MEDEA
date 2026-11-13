@@ -21,12 +21,12 @@ class Schedule:
 
         is_curved = mesh.NURBSext is not None
         nodal_fes = mesh.GetNodalFESpace()
-        if nodal_fes is not None and  nodal_fes.FEColl().GetOrder() > 1:
+        if nodal_fes is not None and nodal_fes.FEColl().GetOrder() > 1:
             is_curved = True
 
         if is_curved == True:
             warnings.warn("Curved meshes not verified", UserWarning)
-    
+
         if angle.Size() != sdim:
             raise ValueError(
                 f"Invalid dimensions in 'angle' for mesh of dimension {sdim}"

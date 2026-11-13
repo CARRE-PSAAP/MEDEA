@@ -10,11 +10,12 @@ import medea
 from medea._backend import mfem
 
 from pathlib import Path
+
 current_dir = Path(__file__).resolve().parent
 
 
 def test_sweep_equivalent_to_global_solve():
-    mesh = mfem.Mesh(f"{current_dir}/data/small_tri_disk.msh")
+    mesh = mfem.Mesh(4, 4, "TRIANGLE")
     velocity = mfem.Vector([0.25, 0.866025404])
 
     ordinate = medea.sweep.Schedule(mesh, velocity)
@@ -75,9 +76,8 @@ def test_sweep_equivalent_to_global_solve():
 
     diff = mfem.Vector(X.Size())
     mfem.subtract_vector(X, sweep_soln, diff)
-    
-    assert(diff.Normlinf() < 1e-8)
 
+    assert diff.Normlinf() < 1e-8
 
 
 def _make_curved_mesh() -> mfem.Mesh:
@@ -100,18 +100,24 @@ def _make_curved_mesh() -> mfem.Mesh:
 
     return mesh
 
+
 def test_reject_curved_mesh():
     mesh = _make_curved_mesh()
     velocity = mfem.Vector([0.25, 0.866025404])
     with pytest.warns(UserWarning, match="Curved meshes not verified"):
         ordinate = medea.sweep.Schedule(mesh, velocity)
 
+
 def test_angle_wrong_dim():
     mesh = mfem.Mesh(4, 4, "TRIANGLE")
     vec1d = mfem.Vector([1.0])
     vec3d = mfem.Vector([1.0, 0.0, 0.0])
 
-    with pytest.raises(ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"):
+    with pytest.raises(
+        ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
+    ):
         medea.sweep.Schedule(mesh, vec1d)
-    with pytest.raises(ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"):
+    with pytest.raises(
+        ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
+    ):
         medea.sweep.Schedule(mesh, vec3d)
