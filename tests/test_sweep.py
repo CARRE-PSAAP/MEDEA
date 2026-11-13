@@ -9,10 +9,6 @@ import pytest
 import medea
 from medea._backend import mfem
 
-from pathlib import Path
-
-current_dir = Path(__file__).resolve().parent
-
 
 def test_sweep_equivalent_to_global_solve():
     mesh = mfem.Mesh(4, 4, "TRIANGLE")
