@@ -60,7 +60,7 @@ class Schedule:
                     queue.append(c)
             result.append(ind)
         if len(result) != mesh.GetNE():
-            return ValueError("Cycle detected in mesh")
+            raise ValueError("Cycle detected in mesh")
         self.order = result
     
     def sweep(self, 
