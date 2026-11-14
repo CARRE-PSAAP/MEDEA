@@ -82,7 +82,7 @@ class TransportSolver:
     ):
         self.sigma_s = sigma_s
         # create bilinear forms for k in angles
-        self.schedules = [medea.sweep.TransportSweep(mesh, angle) for angle in angles]
+        self.transport_operator = medea.sweep.TransportSweep(mesh, angles)
 
         fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
         self.fespace = mfem.FiniteElementSpace(mesh, fec)
@@ -119,7 +119,7 @@ class TransportSolver:
         Scattering source is isotropic: Q = sigma_s * phi, added to the
         linear form. Returns a list of angular flux vectors.
         """
-        solution = []
+        b_list = []
 
         phi_gf = mfem.GridFunction(self.fespace)
         phi_gf.Assign(phi)
@@ -128,7 +128,6 @@ class TransportSolver:
 
         neg_alpha = -1.0
         for k in range(4 * K):
-            a = self.A[k]
             if angles[k][0] > 0:
 
                 inflow = mfem.ConstantCoefficient(100.0)
@@ -143,8 +142,8 @@ class TransportSolver:
             )
             b.AddDomainIntegrator(mfem.DomainLFIntegrator(source_coeff))
             b.Assemble()
-            solution.append(self.schedules[k].sweep(a, b))
-        return solution
+            b_list.append(b)
+        return self.transport_operator.sweep(self.A, b_list)
 
 
 sigma_scatter = mfem.PWConstCoefficient(sigma_svec)

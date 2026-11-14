@@ -9,20 +9,18 @@ import pytest
 import medea
 from medea._backend import mfem
 
+ANGLES = [
+    [0.25, 0.866025404],  # generic direction
+    [-0.866025404, 0.25],  # opposite x half-plane
+    [1.0, 0.0],  # axis-aligned: some faces are parallel to the sweep
+]
 
-def test_sweep_equivalent_to_global_solve():
-    mesh = mfem.Mesh(4, 4, "TRIANGLE")
-    velocity = mfem.Vector([0.25, 0.866025404])
 
-    ordinate = medea.sweep.TransportSweep(mesh, velocity)
-
+def _build_forms(fespace, velocity):
     sigma = mfem.ConstantCoefficient(0.5)
     inflow = mfem.ConstantCoefficient(1.0)
-
-    fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
-    fespace = mfem.FiniteElementSpace(mesh, fec)
-
     alpha = 1.0
+    neg_alpha = -1.0
 
     a = mfem.BilinearForm(fespace)
     a.AddDomainIntegrator(
@@ -40,8 +38,6 @@ def test_sweep_equivalent_to_global_solve():
     )
     a.AddDomainIntegrator(mfem.MassIntegrator(sigma))
 
-    neg_alpha = -1.0
-
     b = mfem.LinearForm(fespace)
     b.AddBdrFaceIntegrator(
         mfem.BoundaryFlowIntegrator(
@@ -53,8 +49,11 @@ def test_sweep_equivalent_to_global_solve():
     a.Assemble()
     a.Finalize()
 
-    sweep_soln = ordinate.sweep(a, b)
+    return a, b
 
+
+def _global_solve(fespace, a, b):
+    """Reference solution of ``a x = b`` using GMRES on the full system."""
     x = mfem.GridFunction(fespace)
     x.Assign(0.0)
 
@@ -70,10 +69,65 @@ def test_sweep_equivalent_to_global_solve():
     mfem.GMRES(AA, M, B, X, 0, 500, 200, 0, 1e-16)
     a.RecoverFEMSolution(X, b, x)
 
-    diff = mfem.Vector(X.Size())
-    mfem.subtract_vector(X, sweep_soln, diff)
+    # X can alias the data of the local GridFunction x, so return a copy
+    return mfem.Vector(X.GetDataArray().copy())
 
-    assert diff.Normlinf() < 1e-8
+
+def _setup():
+    mesh = mfem.Mesh(4, 4, "TRIANGLE")
+    velocities = [mfem.Vector(v) for v in ANGLES]
+
+    fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
+    fespace = mfem.FiniteElementSpace(mesh, fec)
+
+    forms = [_build_forms(fespace, v) for v in velocities]
+    a_list = [a for a, _ in forms]
+    b_list = [b for _, b in forms]
+    return mesh, velocities, fespace, a_list, b_list
+
+
+def _assert_matches_global_solve(fespace, a_list, b_list, indices, solutions):
+    assert len(solutions) == len(indices)
+    for k, sweep_soln in zip(indices, solutions):
+        X = _global_solve(fespace, a_list[k], b_list[k])
+        diff = mfem.Vector(X.Size())
+        mfem.subtract_vector(X, sweep_soln, diff)
+        assert diff.Normlinf() < 1e-8, f"angle {k} differs from global solve"
+
+
+def test_sweep_equivalent_to_global_solve():
+    """Default sweep covers every angle, in the order they were given."""
+    mesh, velocities, fespace, a_list, b_list = _setup()
+
+    ordinate = medea.sweep.TransportSweep(mesh, velocities)
+    solutions = ordinate.sweep(a_list, b_list)
+
+    _assert_matches_global_solve(
+        fespace, a_list, b_list, range(len(velocities)), solutions
+    )
+
+
+def test_sweep_angle_subset():
+    """``sweep(..., range)`` solves only the angles indexed by the range."""
+    mesh, velocities, fespace, a_list, b_list = _setup()
+
+    ordinate = medea.sweep.TransportSweep(mesh, velocities)
+
+    subset = range(1, len(velocities))
+    solutions = ordinate.sweep(a_list, b_list, subset)
+    _assert_matches_global_solve(fespace, a_list, b_list, subset, solutions)
+
+    single = range(2, 3)
+    solutions = ordinate.sweep(a_list, b_list, single)
+    _assert_matches_global_solve(fespace, a_list, b_list, single, solutions)
+
+
+def test_sweep_range_out_of_bounds():
+    mesh, velocities, fespace, a_list, b_list = _setup()
+    ordinate = medea.sweep.TransportSweep(mesh, velocities)
+
+    with pytest.raises(IndexError):
+        ordinate.sweep(a_list, b_list, range(len(velocities) + 1))
 
 
 def _make_curved_mesh() -> mfem.Mesh:
@@ -101,7 +155,7 @@ def test_reject_curved_mesh():
     mesh = _make_curved_mesh()
     velocity = mfem.Vector([0.25, 0.866025404])
     with pytest.warns(UserWarning, match="Curved meshes not verified"):
-        medea.sweep.TransportSweep(mesh, velocity)
+        medea.sweep.TransportSweep(mesh, [velocity])
 
 
 def test_angle_wrong_dim():
@@ -112,8 +166,8 @@ def test_angle_wrong_dim():
     with pytest.raises(
         ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
     ):
-        medea.sweep.TransportSweep(mesh, vec1d)
+        medea.sweep.TransportSweep(mesh, [vec1d])
     with pytest.raises(
         ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
     ):
-        medea.sweep.TransportSweep(mesh, vec3d)
+        medea.sweep.TransportSweep(mesh, [vec3d])

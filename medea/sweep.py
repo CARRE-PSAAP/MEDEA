@@ -3,6 +3,7 @@ Transport sweep scheduling and kernel.
 """
 
 import warnings
+from collections import deque
 
 import numpy as np
 
@@ -21,9 +22,15 @@ class TransportSweep:
     coupling), so for now the sweep ordering is only guaranteed for flat faces.
     """
 
-    def __init__(self, mesh: mfem.Mesh, angle: mfem.Vector):
-        # ensure angle and mesh dimension match
+    def __init__(self, mesh: mfem.Mesh, angles: list[mfem.Vector]):
         sdim = mesh.SpaceDimension()
+
+        # ensure every angle and the mesh dimension match
+        for angle in angles:
+            if angle.Size() != sdim:
+                raise ValueError(
+                    f"Invalid dimensions in 'angle' for mesh of dimension {sdim}"
+                )
 
         is_curved = mesh.NURBSext is not None
         nodal_fes = mesh.GetNodalFESpace()
@@ -33,66 +40,110 @@ class TransportSweep:
         if is_curved == True:
             warnings.warn("Curved meshes not verified", UserWarning)
 
-        if angle.Size() != sdim:
+        TOL = 1e-14
+        num_elements = mesh.GetNE()
+
+        elem1 = []
+        elem2 = []
+        normals = []
+        nor = mfem.Vector(sdim)
+        for face_id in range(mesh.GetNumFaces()):
+            e1, e2 = mesh.GetFaceElements(face_id)
+            if e2 < 0:
+                continue
+
+            face = mesh.GetFaceElementTransformations(face_id)
+            ip = mfem.Geometries.GetCenter(face.GetGeometryType())
+            face.SetIntPoint(ip)
+            mfem.CalcOrtho(face.Jacobian(), nor)
+
+            elem1.append(e1)
+            elem2.append(e2)
+            normals.append(nor.GetDataArray().copy())
+
+        elem1 = np.array(elem1, dtype=int)
+        elem2 = np.array(elem2, dtype=int)
+        normals = np.array(normals).reshape(len(elem1), sdim)
+
+        self.order = []
+        for angle in angles:
+            direction = normals @ angle.GetDataArray()
+
+            # faces parallel to the sweep direction carry no upwind dependency
+            keep = np.abs(direction) >= TOL
+            forward = direction > 0
+            parents = np.where(forward, elem1, elem2)[keep]
+            kids = np.where(forward, elem2, elem1)[keep]
+
+            # children[element] lists all elements that depend on this one
+            children = [[] for _ in range(num_elements)]
+            in_degree = np.bincount(kids, minlength=num_elements).tolist()
+            for parent, child in zip(parents.tolist(), kids.tolist()):
+                children[parent].append(child)
+
+            queue = deque(e for e, deg in enumerate(in_degree) if deg == 0)
+            result = []
+
+            while queue:
+                ind = queue.popleft()
+                for c in children[ind]:
+                    in_degree[c] -= 1
+                    if in_degree[c] == 0:
+                        queue.append(c)
+                result.append(ind)
+            if len(result) != num_elements:
+                raise ValueError("Cycle detected in mesh")
+            self.order.append(result)
+
+    def sweep(
+        self,
+        bilinear_forms: list[mfem.BilinearForm],
+        linear_forms: list[mfem.LinearForm],
+        angle_range: range | None = None,
+    ) -> list[mfem.Vector]:
+        """
+        Sweep the mesh for the angles indexed by ``angle_range`` (default: all angles),
+        using the orderings determined in ``__init__``. ``bilinear_forms[k]`` and
+        ``linear_forms[k]`` are the pre-assembled forms for angle ``k``, so that their
+        data can be extracted.
+
+        Returns one solution per index in ``angle_range``, in the order of the range.
+        """
+        num_angles = len(self.order)
+        if angle_range is None:
+            angle_range = range(num_angles)
+
+        for k in angle_range:
+            if not 0 <= k < num_angles:
+                raise IndexError(
+                    f"Angle index {k} out of range for {num_angles} angles"
+                )
+        if len(bilinear_forms) != num_angles or len(linear_forms) != num_angles:
             raise ValueError(
-                f"Invalid dimensions in 'angle' for mesh of dimension {sdim}"
+                f"Expected one bilinear and linear form per angle ({num_angles})"
             )
 
-        face_table = mesh.GetFaceToElementTable()
-        num_faces = mesh.GetNumFaces()
+        return [
+            self._sweep_angle(bilinear_forms[k], linear_forms[k], self.order[k])
+            for k in angle_range
+        ]
 
-        children = [[] for _ in range(mesh.GetNE())]
-        in_degree = [0 for _ in range(mesh.GetNE())]
-
-        # children[element] lists all elements that depend on this one
-        # parents[element] lists all elements which this one depends on
-
-        for face_id in range(num_faces):
-            num_elements = face_table.RowSize(face_id)
-            if num_elements > 1:
-                # assume elems is in ascending order
-                elems = face_table.GetRowList(face_id)
-
-                face = mesh.GetFaceElementTransformations(face_id)
-                ip = mfem.Geometries.GetCenter(face.GetGeometryType())
-                face.SetIntPoint(ip)
-                nor = mfem.Vector(sdim)
-                mfem.CalcOrtho(face.Jacobian(), nor)
-
-                direction = nor * angle
-                parent = elems[0] if direction > 0 else elems[1]
-                child = elems[1] if direction > 0 else elems[0]
-
-                children[parent].append(child)
-                in_degree[child] += 1
-
-        queue = [i for i, x in enumerate(in_degree) if x == 0]
-        result = []
-
-        while len(queue) != 0:
-            ind = queue.pop(0)
-            for c in children[ind]:
-                in_degree[c] -= 1
-                if in_degree[c] == 0:
-                    queue.append(c)
-            result.append(ind)
-        if len(result) != mesh.GetNE():
-            raise ValueError("Cycle detected in mesh")
-        self.order = result
-
-    def sweep(self, bilinear_form: mfem.BilinearForm, linear_form: mfem.LinearForm):
+    def _sweep_angle(
+        self,
+        bilinear_form: mfem.BilinearForm,
+        linear_form: mfem.LinearForm,
+        order: list[int],
+    ) -> mfem.Vector:
         """
-        Sweep the mesh using the order determined in ``__init__``. ``bilinear_form``
-        and ``linear_form`` must be pre-assembled so that their data can be extracted.
-
-        In each element, the dense local system is solved directly.
+        Sweep the mesh in the element ``order`` for a single angle. In each element,
+        the dense local system is solved directly.
         """
 
         fespace = bilinear_form.FESpace()
         element_dofs = []
 
         # # For each element in schedule order:
-        for elem in self.order:
+        for elem in order:
             dofs = fespace.GetElementDofs(elem)
             element_dofs.append(dofs)
             # Get dofs; add to list of dofs
