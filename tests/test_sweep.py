@@ -14,7 +14,7 @@ def test_sweep_equivalent_to_global_solve():
     mesh = mfem.Mesh(4, 4, "TRIANGLE")
     velocity = mfem.Vector([0.25, 0.866025404])
 
-    ordinate = medea.sweep.Schedule(mesh, velocity)
+    ordinate = medea.sweep.TransportSweep(mesh, velocity)
 
     sigma = mfem.ConstantCoefficient(0.5)
     inflow = mfem.ConstantCoefficient(1.0)
@@ -101,7 +101,7 @@ def test_reject_curved_mesh():
     mesh = _make_curved_mesh()
     velocity = mfem.Vector([0.25, 0.866025404])
     with pytest.warns(UserWarning, match="Curved meshes not verified"):
-        ordinate = medea.sweep.Schedule(mesh, velocity)
+        medea.sweep.TransportSweep(mesh, velocity)
 
 
 def test_angle_wrong_dim():
@@ -112,8 +112,8 @@ def test_angle_wrong_dim():
     with pytest.raises(
         ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
     ):
-        medea.sweep.Schedule(mesh, vec1d)
+        medea.sweep.TransportSweep(mesh, vec1d)
     with pytest.raises(
         ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
     ):
-        medea.sweep.Schedule(mesh, vec3d)
+        medea.sweep.TransportSweep(mesh, vec3d)

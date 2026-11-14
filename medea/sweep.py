@@ -2,17 +2,18 @@
 Transport sweep scheduling and kernel.
 """
 
-import numpy as np
 import warnings
+
+import numpy as np
 
 from medea._backend import mfem
 
 
-class Schedule:
+class TransportSweep:
     """
     mesh sweep object.
-    Schedule.__init__ calls Kahn kernel to create sweep ordering. create one per angle
-    Schedule.sweep() traverses mesh in the order determined at __init__
+    TransportSweep.__init__ calls Kahn kernel to create sweep ordering. create one per angle
+    TransportSweep.sweep() traverses mesh in the order determined at __init__
     """
 
     def __init__(self, mesh: mfem.Mesh, angle: mfem.vector):

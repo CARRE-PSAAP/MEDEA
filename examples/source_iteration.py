@@ -83,7 +83,7 @@ class TransportSolver:
     ):
         self.sigma_s = sigma_s
         # create bilinear forms for k in angles
-        self.schedules = [medea.sweep.Schedule(mesh, angle) for angle in angles]
+        self.schedules = [medea.sweep.TransportSweep(mesh, angle) for angle in angles]
 
         fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
         self.fespace = mfem.FiniteElementSpace(mesh, fec)

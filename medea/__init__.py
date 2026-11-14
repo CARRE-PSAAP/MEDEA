@@ -2,7 +2,7 @@
 
 from ._backend import MFEM_MODE  # "ser" or "par": which PyMFEM module is in use
 from .hello import HelloResult, hello_mfem
-from .sweep import Schedule
+from .sweep import TransportSweep
 
 try:
     from . import _kernels
