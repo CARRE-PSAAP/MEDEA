@@ -22,7 +22,11 @@ class TransportSweep:
     coupling), so for now the sweep ordering is only guaranteed for flat faces.
     """
 
-    def __init__(self, mesh: mfem.Mesh, angles: list[mfem.Vector]):
+    def __init__(self, mesh: mfem.Mesh, angles: mfem.Vector | list[mfem.Vector]):
+        # a single angle is treated as a list of one
+        if isinstance(angles, mfem.Vector):
+            angles = [angles]
+
         sdim = mesh.SpaceDimension()
 
         # ensure every angle and the mesh dimension match
