@@ -11,12 +11,17 @@ from medea._backend import mfem
 
 class TransportSweep:
     """
-    mesh sweep object.
-    TransportSweep.__init__ calls Kahn kernel to create sweep ordering. create one per angle
-    TransportSweep.sweep() traverses mesh in the order determined at __init__
+    Object for creating mesh sweep orderings and performing the sweep.
+    The constructor uses the sign of (n dot angle), where n is the face normal vector,
+    to determine element coupling for a transport solve in the direction of ``angle``.
+    Kahn's Algorithm is then used to determine an ordering for those elements, where
+    each dependency is visited before the element that needs it.
+
+    The ordering is based only on the unit normal vector of the face (not actual ``dof``
+    coupling), so for now the sweep ordering is only guaranteed for flat faces.
     """
 
-    def __init__(self, mesh: mfem.Mesh, angle: mfem.vector):
+    def __init__(self, mesh: mfem.Mesh, angle: mfem.Vector):
         # ensure angle and mesh dimension match
         sdim = mesh.SpaceDimension()
 
@@ -76,8 +81,12 @@ class TransportSweep:
         self.order = result
 
     def sweep(self, bilinear_form: mfem.BilinearForm, linear_form: mfem.LinearForm):
-        # expects pre-built bilinear form matrix and source matrix
-        # writes to 'solution'
+        """
+        Sweep the mesh using the order determined in ``__init__``. ``bilinear_form``
+        and ``linear_form`` must be pre-assembled so that their data can be extracted.
+
+        In each element, the dense local system is solved directly.
+        """
 
         fespace = bilinear_form.FESpace()
         element_dofs = []

@@ -41,7 +41,6 @@ sigma_total = mfem.PWConstCoefficient(
 mesh = mfem.Mesh(f"{current_dir}/data/cubesat.msh")
 
 
-
 # level-symmetric quadrature
 K = 6
 
