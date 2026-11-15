@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Added
 
+- Add `sweep` kernel to create sweep ordering for general meshes and perform block forward substitution to invert transport operator, from [@hansenkyle]
 - Add Sphinx documentation, from [@hansenkyle]
 - Add C++ and MFEM scaffolding, from [@hansenkyle]
 - Add CONTRIBUTING and CHANGELOG, from [@hansenkyle]
@@ -16,14 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Changed
 
-- Compiled code no longer links MFEM or MPI, so `pip install -e .` no longer needs PyMFEM at build time, from [@hansenkyle]
-- Serial CI now tests Python 3.11 and 3.14, from [@hansenkyle]
-
 ### Deprecated
 
 ### Removed
-
-- Remove the build-time `MEDEA_MFEM_MODE` switch and the MFEM-linked C++ `hello_mfem`, from [@hansenkyle]
 
 ### Fixed
 
