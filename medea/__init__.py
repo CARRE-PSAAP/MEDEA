@@ -5,7 +5,6 @@ from .sweep import TransportSweep
 
 try:
     from . import _kernels
-    from ._kernels import sweep_toy
 except ImportError as err:  # compiled module missing
     raise ImportError(
         "medea._kernels (the compiled extension) is missing. Install with "
@@ -14,4 +13,4 @@ except ImportError as err:  # compiled module missing
         "the installed package: run from another directory."
     ) from err
 
-__all__ = ["HelloResult", "MFEM_MODE", "sweep_toy"]
+__all__ = ["HelloResult", "MFEM_MODE"]
