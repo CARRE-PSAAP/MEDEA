@@ -12,17 +12,17 @@ the same build serves serial and parallel runs.
 
 ### Serial (default)
 
-PyMFEM provides wheels on PyPI for serial MFEM, so a serial build can simply done with `pip install`:
+PyMFEM provides wheels on PyPI for serial MFEM, so a serial build can simply be done with `pip install`:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"                            # drop -e for a regular install
+python -m venv .venv && source .venv/bin/activate  # or use a conda environment
+pip install -e ".[dev]"                            # -e for editable install
 python -m pytest && python examples/hello_mfem.py
 ```
 
 ### Parallel (MPI)
 
-Parallel PyMFEM requires a manual build on your machine, which requires MPI and Cmake.
+Parallel PyMFEM must be manually built on your machine, which requires MPI and Cmake.
 
 Build parallel PyMFEM and install MEDEA all at once using the parallel install script:
 
@@ -38,7 +38,6 @@ Test and try the parallel build (needs `pytest` and `pytest-mpi`):
 
 ```bash
 scripts/test_parallel.sh                           # suite on 1 rank, then on 2 (NP=2)
-mpirun -n 2 python examples/hello_mfem.py          # a mesh split over 2 ranks
 ```
 
 Note that parallel execution may fail if `PyMFEM` and `MEDEA` were configured to use different MPI implementations (i.e. conda vs. system MPI).
@@ -48,7 +47,7 @@ Note that parallel execution may fail if `PyMFEM` and `MEDEA` were configured to
 To satisfy the documentation build requirements, install MEDEA with the optional "docs" dependencies:
 
 ```bash
-pip install -e .[docs] --no-build-isolation
+pip install -e ".[docs]"
 ```
 
 To build and view the docs,
