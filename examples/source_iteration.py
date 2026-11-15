@@ -89,6 +89,18 @@ class TransportSolver:
 
         self.transport_operator = medea.sweep.TransportSweep(mesh, self.fespace, angles)
 
+        # Preallocated angular flux, one vector per angle; overwritten in place by every sweep
+        self.psi = [mfem.Vector(self.fespace.GetNDofs()) for _ in range(len(angles))]
+
+        # Scattering source Q = sigma_s * phi is built once. phi_gf is updated in place
+        # each iteration, so the coefficient (and the linear forms) always see the latest phi.
+        self.phi_gf = mfem.GridFunction(self.fespace)
+        self.phi_gf.Assign(0.0)
+        self.source_coeff = mfem.ProductCoefficient(
+            self.sigma_s, mfem.GridFunctionCoefficient(self.phi_gf)
+        )
+        self.b = self._build_linear_forms()
+
         alpha = 1.0
 
         for k in range(len(angles)):
@@ -114,37 +126,32 @@ class TransportSolver:
             a.AddDomainIntegrator(mfem.MassIntegrator(sigma_t))
             a.Assemble()
 
-    def sweep(self, phi: mfem.Vector):
-        """Sweep all angles given scalar flux phi (same DG dof layout as self.fespace).
-
-        Scattering source is isotropic: Q = sigma_s * phi, added to the
-        linear form. Returns a list of angular flux vectors.
-        """
+    def _build_linear_forms(self) -> list[mfem.LinearForm]:
+        """One linear form per angle (inflow boundary term + scattering source)."""
         b_list = []
-
-        phi_gf = mfem.GridFunction(self.fespace)
-        phi_gf.Assign(phi)
-        phi_coeff = mfem.GridFunctionCoefficient(phi_gf)
-        source_coeff = mfem.ProductCoefficient(self.sigma_s, phi_coeff)
-
         neg_alpha = -1.0
-        for k in range(4 * K):
-            if angles[k][0] > 0:
-
-                inflow = mfem.ConstantCoefficient(100.0)
-            else:
-                inflow = mfem.ConstantCoefficient(0.0)
-            velocity = angles[k]
+        for k in range(len(angles)):
+            inflow = mfem.ConstantCoefficient(100.0 if angles[k][0] > 0 else 0.0)
             b = mfem.LinearForm(self.fespace)
             b.AddBdrFaceIntegrator(
                 mfem.BoundaryFlowIntegrator(
-                    inflow, mfem.VectorConstantCoefficient(velocity), neg_alpha
+                    inflow, mfem.VectorConstantCoefficient(angles[k]), neg_alpha
                 )
             )
-            b.AddDomainIntegrator(mfem.DomainLFIntegrator(source_coeff))
-            b.Assemble()
+            b.AddDomainIntegrator(mfem.DomainLFIntegrator(self.source_coeff))
             b_list.append(b)
-        return self.transport_operator.sweep(self.A, b_list)
+        return b_list
+
+    def sweep(self, phi: mfem.Vector) -> list[mfem.Vector]:
+        """Sweep all angles given scalar flux phi (same DG dof layout as self.fespace).
+
+        Scattering source is isotropic: Q = sigma_s * phi. The angular flux is written
+        in place into self.psi (the same vectors are returned every call).
+        """
+        self.phi_gf.Assign(phi)  # in place: source_coeff sees the new phi
+        for b in self.b:
+            b.Assemble()  # re-assembles (zeroes, then fills) the existing linear form
+        return self.transport_operator.sweep(self.A, self.b, out=self.psi)
 
 
 sigma_scatter = mfem.PWConstCoefficient(sigma_svec)

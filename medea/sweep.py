@@ -121,6 +121,8 @@ class TransportSweep:
         self,
         bilinear_forms: list[mfem.BilinearForm],
         linear_forms: list[mfem.LinearForm],
+        out: list[mfem.Vector] | None = None,
+        *,
         angle_range: range | int | None = None,
     ) -> list[mfem.Vector]:
         """
@@ -129,7 +131,12 @@ class TransportSweep:
         ``linear_forms[k]`` are the pre-assembled forms for angle ``k``, so that their
         data can be extracted.
 
-        Returns one solution per index in ``angle_range``, in the order of the range.
+        If ``out`` is given, it must hold one vector of size ``ndofs`` per index in
+        ``angle_range``; each is overwritten in place with the solution for that angle.
+        Otherwise new vectors are allocated.
+
+        Returns ``out`` (or the newly allocated list), one solution per index in
+        ``angle_range``, in the order of the range.
         """
         num_angles = len(self.order)
         if angle_range is None:
@@ -144,7 +151,6 @@ class TransportSweep:
                 raise IndexError(
                     f"Angle index {k} out of range for {num_angles} angles"
                 )
-
         if len(bilinear_forms) != len(angle_range) or len(linear_forms) != len(
             angle_range
         ):
@@ -152,19 +158,34 @@ class TransportSweep:
                 f"Expected one bilinear and linear form per angle ({len(angle_range)})"
             )
 
+        ndofs = bilinear_forms[0].FESpace().GetNDofs() if len(angle_range) else 0
+
+        if out is None:
+            out = [mfem.Vector(ndofs) for _ in angle_range]
+        else:
+            if len(out) != len(angle_range):
+                raise ValueError(
+                    f"Expected one output vector per angle ({len(angle_range)})"
+                )
+            for i, v in enumerate(out):
+                if v.Size() != ndofs:
+                    raise ValueError(
+                        f"Output vector {i} has size {v.Size()}, expected {ndofs}"
+                    )
+
         for m in bilinear_forms:
             m.Finalize()
+        for i, k in enumerate(angle_range):
+            self._sweep_angle(bilinear_forms[i], linear_forms[i], self.order[k], out[i])
 
-        return [
-            self._sweep_angle(bilinear_forms[i], linear_forms[i], self.order[k])
-            for i, k in enumerate(angle_range)
-        ]
+        return out
 
     def _sweep_angle(
         self,
         bilinear_form: mfem.BilinearForm,
         linear_form: mfem.LinearForm,
         order: np.array,
+        solution: mfem.Vector,
     ) -> mfem.Vector:
         """
         Sweep the mesh in the element ``order`` for a single angle. In each element,
@@ -185,11 +206,19 @@ class TransportSweep:
         # ============ #
 
         ndofs = bilinear_form.FESpace().GetNDofs()
-        solution = _sweep(order, ndofs, I, J, D, linear_form.GetDataArray(), self._elem_dof_offsets, self._elem_dof_indices)
-
+        solution.GetDataArray()[:] = _sweep(
+            order,
+            ndofs,
+            I,
+            J,
+            D,
+            linear_form.GetDataArray(),
+            self._elem_dof_offsets,
+            self._elem_dof_indices,
+        )
 
         # ============ #
         # Kernel end   #
         # ============ #
 
-        return mfem.Vector(solution)
+        return solution

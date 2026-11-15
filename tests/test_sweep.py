@@ -117,7 +117,7 @@ def test_sweep_angle_subset():
     solutions = ordinate.sweep(
         a_list[slice(subset.start, subset.stop, subset.step)],
         b_list[slice(subset.start, subset.stop, subset.step)],
-        subset,
+        angle_range=subset,
     )
     _assert_matches_global_solve(fespace, a_list, b_list, subset, solutions)
 
@@ -126,7 +126,7 @@ def test_sweep_angle_subset():
     solutions = ordinate.sweep(
         a_list[slice(single.start, single.stop, single.step)],
         b_list[slice(single.start, single.stop, single.step)],
-        m,
+        angle_range=m,
     )
     _assert_matches_global_solve(fespace, a_list, b_list, single, solutions)
 
@@ -136,7 +136,66 @@ def test_sweep_range_out_of_bounds():
     ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
 
     with pytest.raises(IndexError):
-        ordinate.sweep(a_list, b_list, range(len(velocities) + 1))
+        ordinate.sweep(a_list, b_list, angle_range=range(len(velocities) + 1))
+
+
+def test_sweep_out_written_in_place():
+    """Passing ``out`` fills those exact vectors and returns the same list."""
+    mesh, velocities, fespace, a_list, b_list = _setup()
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
+
+    ndofs = fespace.GetNDofs()
+    out = [mfem.Vector(ndofs) for _ in velocities]
+    for v in out:
+        v.Assign(123.0)  # stale data must be overwritten
+    ids = [id(v) for v in out]
+
+    result = ordinate.sweep(a_list, b_list, out)
+
+    assert result is out
+    assert [id(v) for v in result] == ids
+    _assert_matches_global_solve(fespace, a_list, b_list, range(len(velocities)), out)
+
+    # reusing the same buffers a second time still gives the right answer
+    ordinate.sweep(a_list, b_list, out)
+    _assert_matches_global_solve(fespace, a_list, b_list, range(len(velocities)), out)
+
+
+def test_sweep_out_with_angle_subset():
+    mesh, velocities, fespace, a_list, b_list = _setup()
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
+
+    out = [mfem.Vector(fespace.GetNDofs())]
+    ordinate.sweep([a_list[2]], [b_list[2]], out, angle_range=2)
+    _assert_matches_global_solve(fespace, a_list, b_list, [2], out)
+
+
+def test_sweep_out_wrong_length():
+    mesh, velocities, fespace, a_list, b_list = _setup()
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
+
+    out = [mfem.Vector(fespace.GetNDofs()) for _ in range(len(velocities) - 1)]
+    with pytest.raises(ValueError):
+        ordinate.sweep(a_list, b_list, out)
+
+
+def test_sweep_out_wrong_size():
+    mesh, velocities, fespace, a_list, b_list = _setup()
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
+
+    out = [mfem.Vector(fespace.GetNDofs()) for _ in velocities]
+    out[1] = mfem.Vector(fespace.GetNDofs() + 1)
+    with pytest.raises(ValueError, match="Output vector 1"):
+        ordinate.sweep(a_list, b_list, out)
+
+
+def test_sweep_out_is_keyword_or_third_positional_only():
+    """``angle_range`` is keyword-only."""
+    mesh, velocities, fespace, a_list, b_list = _setup()
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
+
+    with pytest.raises(TypeError):
+        ordinate.sweep(a_list, b_list, None, range(len(velocities)))
 
 
 def _make_curved_mesh() -> mfem.Mesh:
