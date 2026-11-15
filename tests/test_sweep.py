@@ -99,7 +99,7 @@ def test_sweep_equivalent_to_global_solve():
     """Default sweep covers every angle, in the order they were given."""
     mesh, velocities, fespace, a_list, b_list = _setup()
 
-    ordinate = medea.sweep.TransportSweep(mesh, velocities)
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
     solutions = ordinate.sweep(a_list, b_list)
 
     _assert_matches_global_solve(
@@ -111,20 +111,29 @@ def test_sweep_angle_subset():
     """``sweep(..., range)`` solves only the angles indexed by the range."""
     mesh, velocities, fespace, a_list, b_list = _setup()
 
-    ordinate = medea.sweep.TransportSweep(mesh, velocities)
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
 
     subset = range(1, len(velocities))
-    solutions = ordinate.sweep(a_list, b_list, subset)
+    solutions = ordinate.sweep(
+        a_list[slice(subset.start, subset.stop, subset.step)],
+        b_list[slice(subset.start, subset.stop, subset.step)],
+        subset,
+    )
     _assert_matches_global_solve(fespace, a_list, b_list, subset, solutions)
 
-    single = range(2, 3)
-    solutions = ordinate.sweep(a_list, b_list, single)
+    m = 2
+    single = range(m, m + 1)
+    solutions = ordinate.sweep(
+        a_list[slice(single.start, single.stop, single.step)],
+        b_list[slice(single.start, single.stop, single.step)],
+        m,
+    )
     _assert_matches_global_solve(fespace, a_list, b_list, single, solutions)
 
 
 def test_sweep_range_out_of_bounds():
     mesh, velocities, fespace, a_list, b_list = _setup()
-    ordinate = medea.sweep.TransportSweep(mesh, velocities)
+    ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
 
     with pytest.raises(IndexError):
         ordinate.sweep(a_list, b_list, range(len(velocities) + 1))
@@ -153,9 +162,12 @@ def _make_curved_mesh() -> mfem.Mesh:
 
 def test_reject_curved_mesh():
     mesh = _make_curved_mesh()
+    fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
+    fespace = mfem.FiniteElementSpace(mesh, fec)
+
     velocity = mfem.Vector([0.25, 0.866025404])
     with pytest.warns(UserWarning, match="Curved meshes not verified"):
-        medea.sweep.TransportSweep(mesh, [velocity])
+        medea.sweep.TransportSweep(mesh, fespace, [velocity])
 
 
 def test_angle_wrong_dim():
@@ -163,11 +175,14 @@ def test_angle_wrong_dim():
     vec1d = mfem.Vector([1.0])
     vec3d = mfem.Vector([1.0, 0.0, 0.0])
 
+    fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
+    fespace = mfem.FiniteElementSpace(mesh, fec)
+
     with pytest.raises(
         ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
     ):
-        medea.sweep.TransportSweep(mesh, [vec1d])
+        medea.sweep.TransportSweep(mesh, fespace, [vec1d])
     with pytest.raises(
         ValueError, match="Invalid dimensions in 'angle' for mesh of dimension 2"
     ):
-        medea.sweep.TransportSweep(mesh, [vec3d])
+        medea.sweep.TransportSweep(mesh, fespace, [vec3d])

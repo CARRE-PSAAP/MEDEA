@@ -22,8 +22,14 @@ class TransportSweep:
     coupling), so for now the sweep ordering is only guaranteed for flat faces.
     """
 
-    def __init__(self, mesh: mfem.Mesh, angles: mfem.Vector | list[mfem.Vector]):
+    def __init__(
+        self,
+        mesh: mfem.Mesh,
+        fespace: mfem.FESpace,
+        angles: mfem.Vector | list[mfem.Vector],
+    ):
         # a single angle is treated as a list of one
+
         if isinstance(angles, mfem.Vector):
             angles = [angles]
 
@@ -36,6 +42,8 @@ class TransportSweep:
                     f"Invalid dimensions in 'angle' for mesh of dimension {sdim}"
                 )
 
+        self.angles = angles
+
         is_curved = mesh.NURBSext is not None
         nodal_fes = mesh.GetNodalFESpace()
         if nodal_fes is not None and nodal_fes.FEColl().GetOrder() > 1:
@@ -46,6 +54,15 @@ class TransportSweep:
 
         TOL = 1e-14
         num_elements = mesh.GetNE()
+
+        # prepare element -> dof table
+        dof_lists = [
+            np.asarray(fespace.GetElementDofs(e), dtype=np.int32)
+            for e in range(num_elements)
+        ]
+        self._elem_dof_offsets = np.zeros(num_elements + 1, dtype=np.int32)
+        self._elem_dof_offsets[1:] = np.cumsum([len(d) for d in dof_lists])
+        self._elem_dof_indices = np.concatenate(dof_lists)
 
         elem1 = []
         elem2 = []
@@ -97,13 +114,13 @@ class TransportSweep:
                 result.append(ind)
             if len(result) != num_elements:
                 raise ValueError("Cycle detected in mesh")
-            self.order.append(result)
+            self.order.append(np.array(result))
 
     def sweep(
         self,
         bilinear_forms: list[mfem.BilinearForm],
         linear_forms: list[mfem.LinearForm],
-        angle_range: range | None = None,
+        angle_range: range | int | None = None,
     ) -> list[mfem.Vector]:
         """
         Sweep the mesh for the angles indexed by ``angle_range`` (default: all angles),
@@ -117,64 +134,82 @@ class TransportSweep:
         if angle_range is None:
             angle_range = range(num_angles)
 
+        if isinstance(angle_range, int):
+            m = angle_range
+            angle_range = range(m, m + 1)
+
         for k in angle_range:
             if not 0 <= k < num_angles:
                 raise IndexError(
                     f"Angle index {k} out of range for {num_angles} angles"
                 )
-        if len(bilinear_forms) != num_angles or len(linear_forms) != num_angles:
+
+        if len(bilinear_forms) != len(angle_range) or len(linear_forms) != len(
+            angle_range
+        ):
             raise ValueError(
-                f"Expected one bilinear and linear form per angle ({num_angles})"
+                f"Expected one bilinear and linear form per angle ({len(angle_range)})"
             )
 
+        for m in bilinear_forms:
+            m.Finalize()
+
         return [
-            self._sweep_angle(bilinear_forms[k], linear_forms[k], self.order[k])
-            for k in angle_range
+            self._sweep_angle(bilinear_forms[i], linear_forms[i], self.order[k])
+            for i, k in enumerate(angle_range)
         ]
 
     def _sweep_angle(
         self,
         bilinear_form: mfem.BilinearForm,
         linear_form: mfem.LinearForm,
-        order: list[int],
+        order: np.array,
     ) -> mfem.Vector:
         """
         Sweep the mesh in the element ``order`` for a single angle. In each element,
         the dense local system is solved directly.
         """
 
-        fespace = bilinear_form.FESpace()
-        element_dofs = []
-
-        # # For each element in schedule order:
-        for elem in order:
-            dofs = fespace.GetElementDofs(elem)
-            element_dofs.append(dofs)
-            # Get dofs; add to list of dofs
-
-        solution = np.zeros(fespace.GetNDofs())
-
+        # prepare data to pass to kernel
         M = bilinear_form.SpMat()
-        for dofs in element_dofs:
-            cols = mfem.intArray()
-            vals = mfem.Vector()
+        I = M.GetIArray()
+        J = M.GetJArray()
+        D = M.GetDataArray()
+        b = linear_form.GetDataArray()
 
-            local_matrix = [[0.0 for _ in range(len(dofs))] for _ in range(len(dofs))]
-            incoming_source = [0.0 for _ in range(len(dofs))]
+        solution = np.zeros(bilinear_form.FESpace().GetNDofs())
+        # end data preparation
 
-            for index, d in enumerate(dofs):
-                # get rows of bilinear form
-                M.GetRow(d, cols, vals)
-                listcols = cols.GetDataArray()
-                listvals = vals.GetDataArray()
+        # ============ #
+        # Kernel start #
+        # ============ #
+        for e in order:
+            start = self._elem_dof_offsets[e]
+            end = self._elem_dof_offsets[e + 1]
+            dofs = self._elem_dof_indices[start:end]
 
-                for i in range(len(listcols)):
-                    if listcols[i] in dofs:
-                        local_matrix[index][dofs.index(listcols[i])] = listvals[i]
-                    else:
-                        incoming_source[index] -= listvals[i] * solution[listcols[i]]
+            local_matrix = np.zeros((dofs.size, dofs.size), dtype=np.float64)
+            local_rhs = b[dofs]
 
-            a = np.array(linear_form.GetDataArray()[dofs]) + np.array(incoming_source)
-            u = np.linalg.solve(np.array(local_matrix), a)
-            solution[dofs] = u
+            for i, d in enumerate(dofs):
+                start = I[d]
+                end = I[d + 1]
+                cols = J[start:end]
+                vals = D[start:end]
+
+                for c, v in zip(cols, vals):
+                    found = False
+                    for j, dp in enumerate(dofs):
+                        if c == dp:
+                            local_matrix[i, j] = v
+                            found = True
+                            break
+                    if found is False:
+                        local_rhs[i] -= v * solution[c]
+            solution[dofs] = np.linalg.solve(local_matrix, local_rhs)
+
+        # ============ #
+        # Kernel end   #
+        # ============ #
+
         return mfem.Vector(solution)

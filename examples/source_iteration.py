@@ -82,11 +82,12 @@ class TransportSolver:
     ):
         self.sigma_s = sigma_s
         # create bilinear forms for k in angles
-        self.transport_operator = medea.sweep.TransportSweep(mesh, angles)
 
         fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
         self.fespace = mfem.FiniteElementSpace(mesh, fec)
         self.A = [mfem.BilinearForm(self.fespace) for k in range(4 * K)]
+
+        self.transport_operator = medea.sweep.TransportSweep(mesh, self.fespace, angles)
 
         alpha = 1.0
 
