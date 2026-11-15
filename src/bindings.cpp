@@ -143,10 +143,6 @@ RealArray sweep_kernel(IntArray order, IntArray blf_csr_i, IntArray blf_csr_j,
 PYBIND11_MODULE(_kernels, m) {
   m.doc() =
       "MEDEA compiled kernels. Plain NumPy arrays in and out; no MFEM or MPI.";
-  m.def("sweep_toy", &sweep_toy, py::arg("order"), py::arg("up_offsets"),
-        py::arg("up_cells"), py::arg("up_weights"), py::arg("sigma"),
-        py::arg("source"),
-        "Placeholder upwind sweep over a CSR cell graph. Returns psi.");
 
   m.def("sweep_kernel", &sweep_kernel, py::arg("order"), py::arg("blf_csr_i"),
         py::arg("blf_csr_j"), py::arg("blf_csr_data"), py::arg("source_array"),

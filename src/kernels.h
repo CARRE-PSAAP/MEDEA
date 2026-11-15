@@ -6,6 +6,8 @@
 // MPI headers: that keeps this extension independent of PyMFEM and of the
 // serial/parallel choice.
 
+namespace medea {
+
 void sweep_kernel(
     std::int64_t n_elements, std::int64_t n_dofs, const std::int32_t* order,
     Eigen::Map<const Eigen::SparseMatrix<double, Eigen::RowMajor, int>> mat,
