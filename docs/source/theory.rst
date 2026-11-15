@@ -26,8 +26,3 @@ If an ordering exists for this mesh, every cell will be added to the result vect
     only supports meshes with flat faces for now.
 
 
-Charged Particle Physics
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Second Moment Method
-~~~~~~~~~~~~~~~~~~~~

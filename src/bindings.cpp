@@ -26,42 +26,6 @@ void require_1d(const py::buffer_info& info, const char* name,
                                 std::to_string(length));
 }
 
-RealArray2 sweep_toy(IntArray2 order, IntArray2 up_offsets, IntArray2 up_cells,
-                     RealArray2 up_weights, RealArray2 sigma,
-                     RealArray2 source) {
-  const py::ssize_t n = order.size();
-  const py::buffer_info order_i = order.request();
-  const py::buffer_info off_i = up_offsets.request();
-  const py::buffer_info cells_i = up_cells.request();
-  const py::buffer_info w_i = up_weights.request();
-  const py::buffer_info sigma_i = sigma.request();
-  const py::buffer_info src_i = source.request();
-
-  require_1d(order_i, "order", n);
-  require_1d(off_i, "up_offsets", n + 1);
-  require_1d(sigma_i, "sigma", n);
-  require_1d(src_i, "source", n);
-  if (cells_i.ndim != 1) throw std::invalid_argument("up_cells must be 1-D");
-  if (static_cast<const std::int64_t*>(off_i.ptr)[n] != cells_i.shape[0])
-    throw std::invalid_argument(
-        "up_cells length must equal the last entry of up_offsets");
-  require_1d(w_i, "up_weights", cells_i.shape[0]);
-
-  RealArray2 psi(n);
-  double* psi_ptr = psi.mutable_data();
-  const auto* order_p = static_cast<const std::int64_t*>(order_i.ptr);
-  const auto* off_p = static_cast<const std::int64_t*>(off_i.ptr);
-  const auto* cells_p = static_cast<const std::int64_t*>(cells_i.ptr);
-  const auto* w_p = static_cast<const double*>(w_i.ptr);
-  const auto* sigma_p = static_cast<const double*>(sigma_i.ptr);
-  const auto* src_p = static_cast<const double*>(src_i.ptr);
-  {
-    py::gil_scoped_release release;
-    medea::sweep_toy(n, order_p, off_p, cells_p, w_p, sigma_p, src_p, psi_ptr);
-  }
-  return psi;
-}
-
 using IntArray =
     py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>;
 using RealArray =
@@ -129,8 +93,7 @@ RealArray sweep_kernel(IntArray order, IntArray blf_csr_i, IntArray blf_csr_j,
   require_1d(blf_csr_j_i, "blf_csr_j", n_nonzero);
 
   const auto* csr_i = static_cast<const std::int32_t*>(blf_csr_i_i.ptr);
-  if (csr_i[0] != 0)
-    throw std::invalid_argument("blf_csr_i must start at 0");
+  if (csr_i[0] != 0) throw std::invalid_argument("blf_csr_i must start at 0");
   if (csr_i[n_dofs] != n_nonzero)
     throw std::invalid_argument(
         "blf_csr_i must end at the number of nonzeros (len(blf_csr_data))");
