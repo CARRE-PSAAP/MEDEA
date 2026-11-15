@@ -278,3 +278,161 @@ def test_sweep_kernel_order_independent_for_decoupled_elements():
     a = run_kernel(s, np.zeros(n))
     b = run_kernel(s, np.zeros(n), order=s["order"][::-1])
     np.testing.assert_allclose(a, b, rtol=1e-13)
+
+
+# --------------------------------------------------------------------------- #
+# sweep_kernel: O(1) argument checks in the binding                           #
+# --------------------------------------------------------------------------- #
+
+ARG_NAMES = [
+    "order",
+    "blf_csr_i",
+    "blf_csr_j",
+    "blf_csr_data",
+    "source_array",
+    "elem_dof_offset",
+    "elem_dof_indices",
+    "out",
+]
+
+
+def valid_args(n_el=4, size=3, seed=20):
+    s = make_system([size] * n_el, seed)
+    i, j, d = to_csr(s["A"])
+    out = np.zeros(len(s["f"]))
+    return [s["order"], i, j, d, s["f"], s["offsets"], s["indices"], out]
+
+
+def call(args):
+    return _kernels.sweep_kernel(*args)
+
+
+def with_arg(args, name, value):
+    new = list(args)
+    new[ARG_NAMES.index(name)] = value
+    return new
+
+
+def test_sweep_kernel_valid_args_pass():
+    args = valid_args()
+    call(args)
+    assert np.all(args[-1] != 0.0)
+
+
+@pytest.mark.parametrize("name", ARG_NAMES)
+def test_sweep_kernel_rejects_non_1d(name):
+    args = valid_args()
+    arr = args[ARG_NAMES.index(name)]
+    with pytest.raises(ValueError, match="1-D"):
+        call(with_arg(args, name, np.ascontiguousarray(arr.reshape(-1, 1))))
+
+
+def test_sweep_kernel_rejects_wrong_csr_i_length():
+    args = valid_args()
+    for bad in (args[1][:-1], np.append(args[1], args[1][-1])):
+        with pytest.raises(ValueError, match="blf_csr_i must be 1-D of length"):
+            call(with_arg(args, "blf_csr_i", bad))
+
+
+def test_sweep_kernel_rejects_csr_j_data_mismatch():
+    args = valid_args()
+    with pytest.raises(ValueError, match="blf_csr_j must be 1-D of length"):
+        call(with_arg(args, "blf_csr_j", args[2][:-1]))
+    with pytest.raises(ValueError, match="blf_csr_j must be 1-D of length"):
+        call(with_arg(args, "blf_csr_data", args[3][:-1]))
+
+
+def test_sweep_kernel_rejects_csr_i_bad_endpoints():
+    args = valid_args()
+    bad = args[1].copy()
+    bad[0] = 1
+    with pytest.raises(ValueError, match="start at 0"):
+        call(with_arg(args, "blf_csr_i", bad))
+    bad = args[1].copy()
+    bad[-1] += 1
+    with pytest.raises(ValueError, match="end at the number of nonzeros"):
+        call(with_arg(args, "blf_csr_i", bad))
+
+
+def test_sweep_kernel_rejects_bad_elem_dof_offset():
+    args = valid_args()
+    with pytest.raises(ValueError, match="must not be empty"):
+        call(with_arg(args, "elem_dof_offset", np.array([], dtype=np.int32)))
+    bad = args[5].copy()
+    bad[0] = 1
+    with pytest.raises(ValueError, match="elem_dof_offset must start at 0"):
+        call(with_arg(args, "elem_dof_offset", bad))
+    bad = args[5].copy()
+    bad[-1] += 1
+    with pytest.raises(ValueError, match="end at len"):
+        call(with_arg(args, "elem_dof_offset", bad))
+
+
+def test_sweep_kernel_rejects_order_longer_than_element_count():
+    args = valid_args(n_el=4)
+    with pytest.raises(ValueError, match="more entries than there are elements"):
+        call(with_arg(args, "order", np.arange(5, dtype=np.int32)))
+
+
+def test_sweep_kernel_allows_order_shorter_than_element_count():
+    args = valid_args(n_el=4)
+    call(with_arg(args, "order", args[0][:2]))
+
+
+def test_sweep_kernel_rejects_wrong_out_size():
+    args = valid_args()
+    n = len(args[-1])
+    for bad in (np.zeros(n - 1), np.zeros(n + 1)):
+        with pytest.raises(ValueError, match="out must be 1-D of length"):
+            call(with_arg(args, "out", bad))
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.int64, np.complex128])
+def test_sweep_kernel_rejects_non_float64_out(dtype):
+    # Must not silently write into a converted copy.
+    args = valid_args()
+    bad = np.zeros(len(args[-1]), dtype=dtype)
+    with pytest.raises(ValueError, match="float64"):
+        call(with_arg(args, "out", bad))
+
+
+def test_sweep_kernel_rejects_non_array_out():
+    args = valid_args()
+    for bad in (list(args[-1]), None, 3.0):
+        with pytest.raises(TypeError, match="numpy array"):
+            call(with_arg(args, "out", bad))
+
+
+def test_sweep_kernel_rejects_non_contiguous_out():
+    args = valid_args()
+    bad = np.zeros(2 * len(args[-1]))[::2]
+    with pytest.raises(ValueError, match="C-contiguous"):
+        call(with_arg(args, "out", bad))
+
+
+def test_sweep_kernel_rejects_readonly_out():
+    args = valid_args()
+    bad = np.zeros(len(args[-1]))
+    bad.setflags(write=False)
+    with pytest.raises(ValueError, match="writeable"):
+        call(with_arg(args, "out", bad))
+
+
+def test_sweep_kernel_writes_into_callers_array_through_a_view():
+    # A writeable contiguous view must be written in place, not copied.
+    args = valid_args()
+    n = len(args[-1])
+    base = np.zeros(n + 5)
+    call(with_arg(args, "out", base[2 : 2 + n]))
+    assert np.all(base[2 : 2 + n] != 0.0)
+    assert np.all(base[:2] == 0.0) and np.all(base[2 + n :] == 0.0)
+
+
+def test_sweep_kernel_failed_check_leaves_out_untouched():
+    args = valid_args()
+    bad = args[1].copy()
+    bad[-1] += 1
+    out = args[-1]
+    with pytest.raises(ValueError):
+        call(with_arg(args, "blf_csr_i", bad))
+    np.testing.assert_array_equal(out, 0.0)
