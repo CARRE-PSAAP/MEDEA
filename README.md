@@ -6,7 +6,7 @@
 ## Install
 
 Requires Python >= 3.11, plus a C++17 compiler and cmake: `pip` builds MEDEA's
-small compiled extension (`medea._kernels`). That extension works on plain NumPy
+small compiled extension (`medea.kernels`). That extension works on plain NumPy
 arrays and does not link MFEM or MPI, so it needs no PyMFEM at build time and
 the same build serves serial and parallel runs.
 

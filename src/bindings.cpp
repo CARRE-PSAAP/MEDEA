@@ -56,7 +56,7 @@ double* checked_out_ptr(const py::object& out_obj, py::ssize_t n_dofs) {
   return static_cast<double*>(out.mutable_data());
 }
 
-RealArray sweep_kernel(IntArray order, IntArray blf_csr_i, IntArray blf_csr_j,
+RealArray k_sweep(IntArray order, IntArray blf_csr_i, IntArray blf_csr_j,
                        RealArray blf_csr_data, RealArray linear_form,
                        IntArray elem_dof_offset, IntArray elem_dof_indices,
                        py::object out) {
@@ -133,19 +133,19 @@ RealArray sweep_kernel(IntArray order, IntArray blf_csr_i, IntArray blf_csr_j,
   const auto* elem_dof_indices_p = static_cast<const std::int32_t*>(
       elem_dof_indices_i.ptr);  // n_elements big
 
-  medea::sweep_kernel(n_elements, n_dofs, order_p, mat, linear_form_p,
+  medea::k_sweep(n_elements, n_dofs, order_p, mat, linear_form_p,
                       elem_dof_offset_p, elem_dof_indices_p, out_p);
   return RealArray();
 }
 
 }  // namespace
 
-PYBIND11_MODULE(_kernels, m) {
+PYBIND11_MODULE(kernels, m) {
   m.doc() =
       "MEDEA compiled kernels. These contain plain Numpy arrays and do not "
       "interface with MFEM or MPI";
 
-  m.def("sweep_kernel", &sweep_kernel, py::arg("order"), py::arg("blf_csr_i"),
+  m.def("k_sweep", &k_sweep, py::arg("order"), py::arg("blf_csr_i"),
         py::arg("blf_csr_j"), py::arg("blf_csr_data"), py::arg("source_array"),
         py::arg("elem_dof_offset"), py::arg("elem_dof_indices"), py::arg("out"),
         "Solves transport equation by sweeping elements in ``order``, using "

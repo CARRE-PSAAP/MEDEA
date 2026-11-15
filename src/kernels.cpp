@@ -11,7 +11,7 @@
 namespace medea {
 
 using SpMatCSR = Eigen::SparseMatrix<double, Eigen::RowMajor, int>;
-void sweep_kernel(std::int64_t n_elements, std::int64_t n_dofs,
+void k_sweep(std::int64_t n_elements, std::int64_t n_dofs,
                   const std::int32_t* order, Eigen::Map<const SpMatCSR> mat,
                   const double* linear_form,
                   const std::int32_t* elem_dof_offset,

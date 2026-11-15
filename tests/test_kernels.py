@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from medea import _kernels, _reference
+from medea import kernels, k_reference
 
 
 def make_system(sizes, seed=0, density=0.5):
@@ -52,16 +52,14 @@ def to_csr(A):
 def run_kernel(sysd, out, order=None):
     i, j, d = to_csr(sysd["A"])
     order = sysd["order"] if order is None else np.asarray(order, dtype=np.int32)
-    _kernels.sweep_kernel(
-        order, i, j, d, sysd["f"], sysd["offsets"], sysd["indices"], out
-    )
+    kernels.k_sweep(order, i, j, d, sysd["f"], sysd["offsets"], sysd["indices"], out)
     return out
 
 
 def run_reference(sysd, out, order=None):
     i, j, d = to_csr(sysd["A"])
     order = sysd["order"] if order is None else np.asarray(order, dtype=np.int32)
-    _reference.sweep(
+    k_reference.sweep(
         order, len(sysd["f"]), i, j, d, sysd["f"], sysd["offsets"], sysd["indices"], out
     )
     return out
@@ -156,7 +154,7 @@ def test_sweep_kernel_does_not_modify_inputs():
     before = [
         x.copy() for x in (i, j, d, s["f"], s["order"], s["offsets"], s["indices"])
     ]
-    _kernels.sweep_kernel(
+    kernels.k_sweep(
         s["order"], i, j, d, s["f"], s["offsets"], s["indices"], np.zeros(len(s["f"]))
     )
     for b, a in zip(before, (i, j, d, s["f"], s["order"], s["offsets"], s["indices"])):
@@ -194,7 +192,7 @@ def test_sweep_kernel_order_independent_for_decoupled_elements():
 
 
 # --------------------------------------------------------------------------- #
-# sweep_kernel: O(1) argument checks in the binding                           #
+# k_sweep: O(1) argument checks in the binding                           #
 # --------------------------------------------------------------------------- #
 
 ARG_NAMES = [
@@ -217,7 +215,7 @@ def valid_args(n_el=4, size=3, seed=20):
 
 
 def call(args):
-    return _kernels.sweep_kernel(*args)
+    return kernels.k_sweep(*args)
 
 
 def with_arg(args, name, value):

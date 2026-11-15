@@ -18,7 +18,7 @@ FetchContent_MakeAvailable(Eigen3)
 find_package(Python 3.11 REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)
 
-pybind11_add_module(_kernels src/bindings.cpp src/kernels.cpp)
+pybind11_add_module(kernels src/bindings.cpp src/kernels.cpp)
 
-target_link_libraries(_kernels PRIVATE Eigen3::Eigen)
-install(TARGETS _kernels DESTINATION medea)
+target_link_libraries(kernels PRIVATE Eigen3::Eigen)
+install(TARGETS kernels DESTINATION medea)

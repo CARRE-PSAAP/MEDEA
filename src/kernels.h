@@ -8,7 +8,7 @@
 
 namespace medea {
 
-void sweep_kernel(
+void k_sweep(
     std::int64_t n_elements, std::int64_t n_dofs, const std::int32_t* order,
     Eigen::Map<const Eigen::SparseMatrix<double, Eigen::RowMajor, int>> mat,
     const double* linear_form, const std::int32_t* elem_dof_offset,

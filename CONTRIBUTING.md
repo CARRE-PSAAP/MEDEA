@@ -49,7 +49,7 @@ C++ code uses the `Google` style, and uses `clang-format` to perform the formatt
 MEDEA code runs unchanged in serial and under `mpirun`. In order to do that,
 
 - **Don't import `mfem.ser` or `mfem.par` directly.** Use `from medea._backend import mfem`; it picks the right module once per process (see `medea/_backend.py`). PyMFEM cannot load both in one process.
-- **Compiled kernels (C++ in `src/`) are independent of MFEM.** This keeps one build valid for serial and parallel, and independent of the PyMFEM version. Instead pass data as numpy array buffers. CI fails if `medea._kernels` links `libmfem` or `libmpi`.
+- **Compiled kernels (C++ in `src/`) are independent of MFEM.** This keeps one build valid for serial and parallel, and independent of the PyMFEM version. Instead pass data as numpy array buffers. CI fails if `medea.kernels` links `libmfem` or `libmpi`.
 - **Every compiled kernel has a Python reference** in `medea/_reference.py` and a parity test in `tests/test_kernels.py`.
 - **Tests:** put anything that should pass in both modes in `tests/`, asserting global quantities that do not depend on the rank count. Put parallel-only checks in `tests/par/` (collected only on a parallel install), and mark tests that need several ranks with `@pytest.mark.mpi(min_size=2)`. Run `scripts/test_parallel.sh` locally to test on 1 and 2 ranks.
 

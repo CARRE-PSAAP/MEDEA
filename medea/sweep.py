@@ -8,7 +8,7 @@ from collections import deque
 import numpy as np
 
 from medea._backend import mfem
-from medea._kernels import sweep_kernel
+from medea.kernels import k_sweep
 
 
 class TransportSweep:
@@ -209,7 +209,7 @@ class TransportSweep:
 
         # end data preparation
 
-        sweep_kernel(
+        k_sweep(
             order,
             I,
             J,
