@@ -72,19 +72,53 @@ XC, ZC = 6.2, 5.0  # 1D line passes through memory die, Ta plate, adc die, wheel
 # default output directory: examples/data next to this script (any cwd)
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
-# --- element size (cm) per material (order of NAMES): fine for 1D/2D,
-#     feature-sized (coarse) for 3D tets
-H_FINE = [0.5, 0.10, 0.025, 0.08, 0.05, 0.15, 0.10]
-H_3D = [1.0, 0.20, 0.05, 0.16, 0.10, 0.50, 0.40]
+# --- element size (cm) per material, in NAMES order, as (h_boundary, h_center):
+#     the size at the surface of a region and at its middle.  In between, the size
+#     varies linearly with depth, reaching h_center at half the region's smallest
+#     dimension.  Equal values = uniform.  For vacuum, "boundary" is the size against
+#     a solid and "center" the size far from solids (reached over GRADE); in the tet
+#     mesh the vacuum size at a solid is also capped by that solid's h_boundary, so
+#     the mesh stays graded across the interface.
+#          vacuum      aluminum    silicon       fr4         tantalum    battery      steel
+H_FINE = [
+    (0.8, 0.8),
+    (0.10, 0.10),
+    (0.005, 0.015),
+    (0.08, 0.08),
+    (0.05, 0.05),
+    (0.15, 0.50),
+    (0.10, 0.35),
+]  # tet 1D/2D
+H_3D = [
+    (1.0, 1.0),
+    (0.20, 0.20),
+    (0.05, 0.05),
+    (0.16, 0.16),
+    (0.10, 0.10),
+    (0.50, 1.50),
+    (0.40, 1.20),
+]  # tet 3D
+H_HEX = [
+    (0.5, 0.5),
+    (0.10, 0.10),
+    (0.005, 0.01),
+    (0.08, 0.08),
+    (0.05, 0.05),
+    (0.15, 0.50),
+    (0.10, 0.35),
+]  # hex 1D/2D
+H_HEX_3D = [
+    (1.0, 1.0),
+    (0.20, 0.20),
+    (0.05, 0.05),
+    (0.16, 0.16),
+    (0.10, 0.10),
+    (0.50, 1.50),
+    (0.40, 1.20),
+]  # hex 3D
 
-# --- hex/quad mesh (--mesh hex): target max element edge (cm) per material, in
-#     NAMES order.  Elements are split only along axes longer than the target.
-H_HEX = [0.5, 0.10, 0.025, 0.08, 0.05, 0.15, 0.10]
-H_HEX_3D = [1.0, 0.20, 0.05, 0.16, 0.10, 0.50, 0.40]
-
-# --- tet mesh grading (3D only for INTERIOR and FAR_*)
-GRADE = 1.0  # distance over which sizes grow from a solid's boundary size
-INTERIOR = 3.0  # 3D: element size at the center of a solid, relative to its boundary size
+# --- grading
+GRADE = 1.0  # distance over which vacuum size grows from a solid's boundary size to its center size
 FAR_SIZE = 0.8  # 3D: max element size far from the silicon dies (None: off)
 FAR_DIST = (1.0, 5.0)  # 3D: distance from silicon over which sizes grow to FAR_SIZE
 # ============================================================================
@@ -147,7 +181,8 @@ def check_geometry(regs):
     for i, (_, l1, h1) in enumerate(regs):
         for _, l2, h2 in regs[i + 1 :]:
             assert not all(
-                min(b1, b2) - max(a1, a2) > eps for a1, b1, a2, b2 in zip(l1, h1, l2, h2)
+                min(b1, b2) - max(a1, a2) > eps
+                for a1, b1, a2, b2 in zip(l1, h1, l2, h2)
             ), f"regions overlap: {l1}-{h1} and {l2}-{h2}"
 
 
@@ -155,19 +190,34 @@ def check_geometry(regs):
 #  TET / TRIANGLE / SEGMENT MESH  (gmsh, conforming)                      #
 # ====================================================================== #
 # ------------------------------------------------------------------ 1D mesh --
+def graded_nodes(lo, hi, hb, hc):
+    """Node positions on [lo, hi]: spacing hb at both ends, growing to hc at the middle."""
+    half = 0.5 * (hi - lo)
+
+    def size(x):
+        return hb + (hc - hb) * min(1.0, min(x - lo, hi - x) / half)
+
+    xs = [lo]
+    while hi - xs[-1] > 0.5 * size(xs[-1]):
+        xs.append(xs[-1] + size(xs[-1]))
+    xs = np.array(
+        xs + [xs[-1] + size(xs[-1])]
+    )  # one past the end, then fit to [lo, hi]
+    return lo + (xs - lo) * (hi - lo) / (xs[-1] - lo)
+
+
 def mesh_1d(regs, H):
-    """Contiguous line segments between every region boundary along y."""
+    """Contiguous line segments between every region boundary, graded within regions."""
     geo = gmsh.model.geo
     ys = sorted({0.0, BOX, *[v for _, lo, hi in regs for v in (lo[0], hi[0])]})
-    pts = [geo.addPoint(y, 0, 0) for y in ys]
-    groups = {}
-    for i in range(len(ys) - 1):
-        mid = 0.5 * (ys[i] + ys[i + 1])
-        m = next((m for m, lo, hi in regs if lo[0] < mid < hi[0]), VACUUM)
-        c = geo.addLine(pts[i], pts[i + 1])
-        n = math.ceil((ys[i + 1] - ys[i]) / H[m - 1] - 1e-9)
-        geo.mesh.setTransfiniteCurve(c, n + 1)
-        groups.setdefault(m, []).append(c)
+    groups, prev = {}, geo.addPoint(ys[0], 0, 0)
+    for lo, hi in zip(ys[:-1], ys[1:]):
+        mid = 0.5 * (lo + hi)
+        m = next((m for m, rlo, rhi in regs if rlo[0] < mid < rhi[0]), VACUUM)
+        for x in graded_nodes(lo, hi, *H[m - 1])[1:]:
+            pt = geo.addPoint(x, 0, 0)
+            groups.setdefault(m, []).append(geo.addLine(prev, pt))
+            prev = pt
     geo.synchronize()
     return groups
 
@@ -224,7 +274,9 @@ def mesh_nd(regs, dim, H):
     def threshold(infield, smin, smax, dmin, dmax):
         th = F.add("Threshold")
         F.setNumber(th, "InField", infield)
-        for k, v in zip(("SizeMin", "SizeMax", "DistMin", "DistMax"), (smin, smax, dmin, dmax)):
+        for k, v in zip(
+            ("SizeMin", "SizeMax", "DistMin", "DistMax"), (smin, smax, dmin, dmax)
+        ):
             F.setNumber(th, k, v)
         return th
 
@@ -243,26 +295,36 @@ def mesh_nd(regs, dim, H):
     def ents_of(m):
         return closure([t for t, mm in mat.items() if mm == m])
 
-    # 3D only: let elements grow away from the sensitive silicon, and toward the
-    # interior of each solid (distance from its own boundary)
+    # 3D only: let elements grow away from the sensitive silicon
     far = None
     if dim == 3 and FAR_SIZE and SILICON in mat.values():
-        far = threshold(distance(ents_of(SILICON)), 0.0, FAR_SIZE, FAR_DIST[0], FAR_DIST[1])
+        far = threshold(
+            distance(ents_of(SILICON)), 0.0, FAR_SIZE, FAR_DIST[0], FAR_DIST[1]
+        )
 
     def grow(f):  # coarsen field f by the far-from-silicon growth, if any
         return combine("Max", [f, far]) if far is not None else f
 
+    # solids: size runs from h_boundary at each solid's surface to h_center at the
+    # middle (half its smallest dimension in), one field per solid
+    fields = []
+    for t, m in mat.items():
+        if m == VACUUM:
+            continue
+        hb, hc = H[m - 1]
+        ents = closure([t])
+        bb = gmsh.model.getBoundingBox(dim, t)
+        half = 0.5 * min(bb[3 + a] - bb[a] for a in range(dim))
+        f = const(hb) if hc == hb else threshold(distance(ents), hb, hc, 0, half)
+        fields.append(restrict(grow(f), ents))
+
+    # vacuum: from the neighboring solid's boundary size, growing to its center size
     vacuum = closure([t for t, m in mat.items() if m == VACUUM])
-    fields, vac_fields = [], [const(H[VACUUM - 1])]
+    hb_vac, hc_vac = H[VACUUM - 1]
+    vac_fields = [const(hc_vac)]
     for m in sorted(set(mat.values()) - {VACUUM}):
-        ents = ents_of(m)
-        dist = distance(ents)
-        inner = [const(H[m - 1])]
-        if dim == 3 and m != SILICON:
-            inner.append(threshold(dist, H[m - 1], INTERIOR * H[m - 1], 0, GRADE))
-        fields.append(restrict(grow(combine("Max", inner)), ents))
-        # in vacuum, grow from this solid's size toward the vacuum size
-        vac_fields.append(threshold(dist, H[m - 1], H[VACUUM - 1], 0, GRADE))
+        hb = min(hb_vac, H[m - 1][0])
+        vac_fields.append(threshold(distance(ents_of(m)), hb, hc_vac, 0, GRADE))
     fields.append(restrict(grow(combine("Min", vac_fields)), vacuum))
     mn = F.add("Min")
     F.setNumbers(mn, "FieldsList", fields)
@@ -287,7 +349,8 @@ def mesh_hex(regs, dim, H):
     1. Base tensor grid with a grid line at every region boundary, so each base
        cell lies in exactly one material and the geometry is exact.
     2. Repeatedly split cells (hanging nodes allowed) along only those axes
-       whose edge is longer than the target size H of the cell's material.
+       whose edge is longer than the target size at the cell's center: H[m] =
+       (h_boundary, h_center), varying with depth into the region (see H_HEX).
     """
     from medea._backend import mfem
 
@@ -312,7 +375,13 @@ def mesh_hex(regs, dim, H):
         )
     else:
         mesh = mfem.Mesh.MakeCartesian3D(
-            n[0], n[1], n[2], mfem.Element.HEXAHEDRON, float(n[0]), float(n[1]), float(n[2])
+            n[0],
+            n[1],
+            n[2],
+            mfem.Element.HEXAHEDRON,
+            float(n[0]),
+            float(n[1]),
+            float(n[2]),
         )
     for k in range(mesh.GetNV()):
         v = mesh.GetVertexArray(k)
@@ -320,28 +389,57 @@ def mesh_hex(regs, dim, H):
             v[a] = axes[a][int(round(v[a]))]
 
     def bbox(e):
-        pts = np.array([mesh.GetVertexArray(int(i))[:dim] for i in mesh.GetElementVertices(e)])
+        pts = np.array(
+            [mesh.GetVertexArray(int(i))[:dim] for i in mesh.GetElementVertices(e)]
+        )
         return pts.min(axis=0), pts.max(axis=0)
 
     def material(lo, hi):
         mid = 0.5 * (lo + hi)
         return next(
-            (m for m, rlo, rhi in regs if all(r0 < c < r1 for r0, c, r1 in zip(rlo, mid, rhi))),
+            (
+                m
+                for m, rlo, rhi in regs
+                if all(r0 < c < r1 for r0, c, r1 in zip(rlo, mid, rhi))
+            ),
             VACUUM,
         )
 
     for e in range(mesh.GetNE()):
         mesh.SetAttribute(e, material(*bbox(e)))
 
+    # region data for the size function
+    rlo = np.array([lo for _, lo, _ in regs])
+    rhi = np.array([hi for _, _, hi in regs])
+    rmat = np.array([m for m, _, _ in regs])
+    rhalf = 0.5 * (rhi - rlo).min(axis=1)
+    hb = np.array([p[0] for p in H])
+    hc = np.array([p[1] for p in H])
+
+    def target_size(c):
+        """Target edge length at element centers c (n, dim)."""
+        cc = c[:, None, :]
+        inside = ((cc > rlo) & (cc < rhi)).all(axis=2)  # (n, regions)
+        r = inside.argmax(axis=1)
+        depth = np.minimum(c - rlo[r], rhi[r] - c).min(axis=1)  # to region surface
+        t = np.clip(depth / rhalf[r], 0.0, 1.0)
+        h_solid = hb[rmat[r] - 1] + (hc[rmat[r] - 1] - hb[rmat[r] - 1]) * t
+        # vacuum: distance to the nearest solid
+        gap = np.maximum(np.maximum(rlo - cc, cc - rhi), 0.0)
+        dist = np.sqrt((gap**2).sum(axis=2))
+        h_vac = hb[0] + (hc[0] - hb[0]) * np.clip(dist.min(axis=1) / GRADE, 0.0, 1.0)
+        return np.where(inside.any(axis=1), h_solid, h_vac)
+
     mesh.EnsureNCMesh()
     for _ in range(40):
+        boxes = [bbox(e) for e in range(mesh.GetNE())]
+        lo = np.array([b[0] for b in boxes])
+        hi = np.array([b[1] for b in boxes])
+        too_long = (hi - lo) > target_size(0.5 * (lo + hi))[:, None] * (1 + 1e-9)
+        bits = (too_long * (1 << np.arange(dim))).sum(axis=1)
         refs = mfem.RefinementArray()
-        for e in range(mesh.GetNE()):
-            lo, hi = bbox(e)
-            h = H[mesh.GetAttribute(e) - 1]
-            bits = sum(1 << a for a in range(dim) if hi[a] - lo[a] > h * (1 + 1e-9))
-            if bits:
-                refs.Append(mfem.Refinement(e, bits))
+        for e in np.nonzero(bits)[0]:
+            refs.Append(mfem.Refinement(int(e), int(bits[e])))
         if refs.Size() == 0:
             break
         mesh.GeneralRefinement(refs, 1)  # 1 = non-conforming
@@ -356,7 +454,9 @@ def show_hex(mesh, dim, run=True):
     """
     gmsh.initialize()
     gmsh.model.add("cubesat_hex")
-    gtype = {1: 1, 2: 3, 3: 5}[dim]  # gmsh line / quad / hex8; vertex order matches MFEM
+    gtype = {1: 1, 2: 3, 3: 5}[
+        dim
+    ]  # gmsh line / quad / hex8; vertex order matches MFEM
     elems = {}
     for e in range(mesh.GetNE()):
         elems.setdefault(mesh.GetAttribute(e), []).append(e)
@@ -365,7 +465,9 @@ def show_hex(mesh, dim, run=True):
         gmsh.model.addDiscreteEntity(dim, m)
         verts = sorted({int(v) for e in es for v in mesh.GetElementVertices(e)})
         tag = {v: next_node + i for i, v in enumerate(verts)}
-        coords = np.concatenate([np.pad(mesh.GetVertexArray(v)[:dim], (0, 3 - dim)) for v in verts])
+        coords = np.concatenate(
+            [np.pad(mesh.GetVertexArray(v)[:dim], (0, 3 - dim)) for v in verts]
+        )
         gmsh.model.mesh.addNodes(dim, m, list(tag.values()), coords)
         conn = [tag[int(v)] for e in es for v in mesh.GetElementVertices(e)]
         gmsh.model.mesh.addElementsByType(m, gtype, [], conn)
@@ -380,7 +482,9 @@ def show_hex(mesh, dim, run=True):
 def sensitive_report(sv):
     print("sensitive volumes (material 3, cm):")
     for name, (_, lo, hi) in sv.items():
-        print(f"  {name:7s} x=[{lo[0]},{hi[0]}] y=[{lo[1]:.3f},{hi[1]:.3f}] z=[{lo[2]},{hi[2]}]")
+        print(
+            f"  {name:7s} x=[{lo[0]},{hi[0]}] y=[{lo[1]:.3f},{hi[1]:.3f}] z=[{lo[2]},{hi[2]}]"
+        )
 
 
 def main():
@@ -389,7 +493,10 @@ def main():
     )
     p.add_argument("--dim", type=int, choices=[1, 2, 3], default=2)
     p.add_argument("--mesh", choices=["tet", "hex"], default="tet")
-    p.add_argument("--out", help="output file (default examples/data/cubesat_<dim>d[_hex].msh/.mesh)")
+    p.add_argument(
+        "--out",
+        help="output file (default examples/data/cubesat_<dim>d[_hex].msh/.mesh)",
+    )
     p.add_argument("--scale", type=float, default=1.0, help="scale all mesh sizes")
     p.add_argument("--gui", action="store_true", help="open the mesh in the gmsh GUI")
     a = p.parse_args()
@@ -401,14 +508,16 @@ def main():
     if a.mesh == "hex":
         out = a.out or str(DATA_DIR / f"cubesat_{a.dim}d_hex.mesh")
         Path(out).parent.mkdir(parents=True, exist_ok=True)
-        H = [h * a.scale for h in (H_HEX_3D if a.dim == 3 else H_HEX)]
+        H = [(b * a.scale, c * a.scale) for b, c in (H_HEX_3D if a.dim == 3 else H_HEX)]
         mesh = mesh_hex(regs, a.dim, H)
         mesh.Print(out)
         counts = {NAMES[m - 1]: 0 for m in range(1, 8)}
         for e in range(mesh.GetNE()):
             counts[NAMES[mesh.GetAttribute(e) - 1]] += 1
-        print(f"wrote {out}: {a.dim}D hex/quad, {mesh.GetNE()} elements, "
-              f"nonconforming={mesh.Nonconforming()}, per material {counts}")
+        print(
+            f"wrote {out}: {a.dim}D hex/quad, {mesh.GetNE()} elements, "
+            f"nonconforming={mesh.Nonconforming()}, per material {counts}"
+        )
         sensitive_report(sv)
         if a.gui:
             assert gmsh is not None, "gmsh is required for --gui"
@@ -419,7 +528,7 @@ def main():
     assert gmsh is not None, "gmsh is required for --mesh tet (pip install gmsh)"
     out = a.out or str(DATA_DIR / f"cubesat_{a.dim}d.msh")
     Path(out).parent.mkdir(parents=True, exist_ok=True)
-    H = [h * a.scale for h in (H_3D if a.dim == 3 else H_FINE)]
+    H = [(b * a.scale, c * a.scale) for b, c in (H_3D if a.dim == 3 else H_FINE)]
 
     gmsh.initialize()
     gmsh.model.add("cubesat")
