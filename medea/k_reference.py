@@ -19,6 +19,8 @@ def sweep(
     elem_dof_indices: np.ndarray[np.int32],
     out: np.ndarray[np.float64],
 ) -> np.ndarray[np.float64]:
+
+    # for each element
     for e in order:
         start = elem_dof_offset[e]
         end = elem_dof_offset[e + 1]
@@ -26,15 +28,19 @@ def sweep(
 
         local_matrix = np.zeros((dofs.size, dofs.size), dtype=np.float64)
         local_rhs = linear_form[dofs]
-
+        
+        # for each local dof (row in bilinear form)
         for i, d in enumerate(dofs):
             start = blf_csr_i[d]
             end = blf_csr_i[d + 1]
             cols = blf_csr_j[start:end]
             vals = blf_csr_data[start:end]
 
+            # for each value in this row
             for c, v in zip(cols, vals):
                 found = False
+                
+                # check if local
                 for j, dp in enumerate(dofs):
                     if c == dp:
                         local_matrix[i, j] = v
@@ -44,20 +50,3 @@ def sweep(
                     local_rhs[i] -= v * out[c]
         out[dofs] = np.linalg.solve(local_matrix, local_rhs)
 
-
-def sweep_toy(order, up_offsets, up_cells, up_weights, sigma, source):
-    """Reference for :func:`medea._kernels.sweep_toy`."""
-    order = np.asarray(order)
-    n = len(order)
-    psi = np.zeros(n)
-    done = np.zeros(n, dtype=bool)
-    for c in order:
-        acc = source[c]
-        for k in range(up_offsets[c], up_offsets[c + 1]):
-            u = up_cells[k]
-            if not done[u]:
-                raise ValueError(f"upstream cell {u} is not before cell {c} in order")
-            acc += up_weights[k] * psi[u]
-        psi[c] = acc / sigma[c]
-        done[c] = True
-    return psi

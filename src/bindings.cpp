@@ -14,10 +14,6 @@ namespace py = pybind11;
 
 namespace {
 
-using IntArray2 =
-    py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
-using RealArray2 =
-    py::array_t<double, py::array::c_style | py::array::forcecast>;
 
 void require_1d(const py::buffer_info& info, const char* name,
                 py::ssize_t length) {
