@@ -8,6 +8,7 @@ from collections import deque
 import numpy as np
 
 from medea._backend import mfem
+from medea._reference import sweep as _sweep
 
 
 class TransportSweep:
@@ -177,36 +178,15 @@ class TransportSweep:
         D = M.GetDataArray()
         b = linear_form.GetDataArray()
 
-        solution = np.zeros(bilinear_form.FESpace().GetNDofs())
         # end data preparation
 
         # ============ #
         # Kernel start #
         # ============ #
-        for e in order:
-            start = self._elem_dof_offsets[e]
-            end = self._elem_dof_offsets[e + 1]
-            dofs = self._elem_dof_indices[start:end]
 
-            local_matrix = np.zeros((dofs.size, dofs.size), dtype=np.float64)
-            local_rhs = b[dofs]
+        ndofs = bilinear_form.FESpace().GetNDofs()
+        solution = _sweep(order, ndofs, I, J, D, linear_form.GetDataArray(), self._elem_dof_offsets, self._elem_dof_indices)
 
-            for i, d in enumerate(dofs):
-                start = I[d]
-                end = I[d + 1]
-                cols = J[start:end]
-                vals = D[start:end]
-
-                for c, v in zip(cols, vals):
-                    found = False
-                    for j, dp in enumerate(dofs):
-                        if c == dp:
-                            local_matrix[i, j] = v
-                            found = True
-                            break
-                    if found is False:
-                        local_rhs[i] -= v * solution[c]
-            solution[dofs] = np.linalg.solve(local_matrix, local_rhs)
 
         # ============ #
         # Kernel end   #

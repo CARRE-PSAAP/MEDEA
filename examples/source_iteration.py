@@ -157,7 +157,7 @@ phi.Assign(0.0)
 error = 1
 
 iter = 0
-while error > 1e-4:
+while error > 1e-8:
     iter += 1
     phi_old = mfem.Vector(phi.GetDataArray())
     psi = solver.sweep(phi)
