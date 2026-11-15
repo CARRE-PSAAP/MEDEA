@@ -1,14 +1,19 @@
 """
 Example problem:
 
-Cubesat with sensitive volume (simple)
-2D square region; rectangular sensitive volumes in center, surrounded by thin shield
-in vacuum. Isotropic incoming flux on one side of domain.
+Cubesat with sensitive volumes (silicon dies) inside an aluminum shell.
+Run in 1D (vertical line), 2D (slice) or 3D with --dim; the meshes come from
+cubesat.py (examples/data/cubesat_{1,2,3}d.msh). Incoming flux on the
+x = 0 side of the domain (the bottom of the 1D line).
+
+    python examples/source_iteration.py --dim 2
 
 Source iteration algorithm with 1e-6 relative global convergence tolerance
 
 """
 
+import argparse
+import itertools
 import time
 from pathlib import Path
 
@@ -17,10 +22,19 @@ import numpy as np
 import medea
 from medea._backend import mfem
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--dim", type=int, choices=[1, 2, 3], default=2)
+parser.add_argument("--mesh", help="mesh file (default: examples/data/cubesat_<dim>d.msh)")
+args = parser.parse_args()
+dim = args.dim
+
 start = time.perf_counter()
 
 
 current_dir = Path(__file__).resolve().parent
+
+sigma_t_vac = 0.0
+sigma_s_vac = 0.0
 
 sigma_t_al = 1.0
 sigma_s_al = 0.9
@@ -28,42 +42,61 @@ sigma_s_al = 0.9
 sigma_t_si = 11.0
 sigma_s_si = 10.0
 
-sigma_t_vac = 0.0
-sigma_s_vac = 0.0
+sigma_t_fr = 11.0
+sigma_s_fr = 10.0
 
-sigma_svec = mfem.Vector([sigma_s_vac, sigma_s_al, sigma_s_si])
+sigma_t_ta = 11.0
+sigma_s_ta = 10.0
+
+sigma_t_bat = 11.0
+sigma_s_bat = 10.0
+
+sigma_t_steel = 11.0
+sigma_s_steel = 10.0
+
+
+sigma_svec = mfem.Vector([sigma_s_vac, sigma_s_al, sigma_s_si, sigma_s_fr, sigma_s_ta, sigma_s_bat, sigma_s_steel])
 
 sigma_total = mfem.PWConstCoefficient(
-    mfem.Vector([sigma_t_vac, sigma_t_al, sigma_t_si])
+    mfem.Vector([sigma_t_vac, sigma_t_al, sigma_t_si, sigma_t_fr, sigma_t_ta, sigma_t_bat, sigma_t_steel])
 )
 
 
-mesh = mfem.Mesh(f"{current_dir}/data/cubesat.msh")
+mesh = mfem.Mesh(args.mesh or f"{current_dir}/data/cubesat_{dim}d.msh")
 
 
-# level-symmetric quadrature
-K = 6
+# ---- angular quadrature: quad[dim - 1] = (angles, weights), weights sum to 1
+def reflect(first_orthant, w):
+    """Reflect first-orthant direction cosines (n, d) into all 2**d orthants."""
+    first_orthant = np.asarray(first_orthant)
+    signs = np.array(list(itertools.product((1, -1), repeat=first_orthant.shape[1])))
+    ang = np.concatenate([first_orthant * s for s in signs])
+    weights = np.tile(w, len(signs))
+    return [mfem.Vector([float(v) for v in a]) for a in ang], weights / weights.sum()
 
-ne_angles = [
-    mfem.Vector([0.2666355, 0.2666355]),
-    mfem.Vector([0.2666355, 0.6815076]),
-    mfem.Vector([0.2666355, 0.9261808]),
-    mfem.Vector([0.6815076, 0.2666355]),
-    mfem.Vector([0.6815076, 0.6815076]),
-    mfem.Vector([0.9261808, 0.2666355]),
-]
 
+# 1D: S4 double Gauss-Legendre (4 Gauss points on each of mu in [-1,0], [0,1])
+x, w = np.polynomial.legendre.leggauss(4)
+quad_1d = reflect(((x + 1) / 2)[:, None], w)
+
+# 2D/3D: S6 level-symmetric, one octant (mu, eta); xi is fixed by mu^2+eta^2+xi^2 = 1
+mu_eta = np.array(
+    [
+        [0.2666355, 0.2666355],
+        [0.2666355, 0.6815076],
+        [0.2666355, 0.9261808],
+        [0.6815076, 0.2666355],
+        [0.6815076, 0.6815076],
+        [0.9261808, 0.2666355],
+    ]
+)
+xi = np.sqrt(1.0 - (mu_eta**2).sum(axis=1))
 weights = [0.1761263, 0.1572071, 0.1761263, 0.1572071, 0.1572071, 0.1761263]
-angles = [mfem.Vector(2) for _ in range(4 * K)]
+quad_2d = reflect(mu_eta, weights)  # 24 angles
+quad_3d = reflect(np.column_stack([mu_eta, xi]), weights)  # 48 angles
 
-for k in range(K):
-    angles[k] = mfem.Vector([ne_angles[k][0], ne_angles[k][1]])
-    angles[k + (1 * K)] = mfem.Vector([-ne_angles[k][0], ne_angles[k][1]])
-    angles[k + (2 * K)] = mfem.Vector([ne_angles[k][0], -ne_angles[k][1]])
-    angles[k + (3 * K)] = mfem.Vector([-ne_angles[k][0], -ne_angles[k][1]])
-
-angle_weights = np.tile(weights, 4)
-angle_weights = angle_weights / angle_weights.sum()
+quad = [quad_1d, quad_2d, quad_3d]
+angles, angle_weights = quad[dim - 1]
 
 
 def scalar_flux(angular_flux, quad_weights=angle_weights) -> mfem.Vector:
@@ -85,7 +118,7 @@ class TransportSolver:
 
         fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
         self.fespace = mfem.FiniteElementSpace(mesh, fec)
-        self.A = [mfem.BilinearForm(self.fespace) for k in range(4 * K)]
+        self.A = [mfem.BilinearForm(self.fespace) for _ in angles]
 
         self.transport_operator = medea.sweep.TransportSweep(mesh, self.fespace, angles)
 
@@ -164,7 +197,7 @@ phi.Assign(0.0)
 error = 1
 
 iter = 0
-while error > 1e-8:
+while error > 1e-4:
     iter += 1
     phi_old = mfem.Vector(phi.GetDataArray())
     psi = solver.sweep(phi)
@@ -177,6 +210,9 @@ while error > 1e-8:
 
 end = time.perf_counter()
 elapsed = end - start
+
+print("\n---------\n")
+print(f"{mesh.GetNE()} cells")
 print(
     f"Elapsed time: {elapsed:.2f} seconds\n{(elapsed/(iter * len(psi))):.2e}s per sweep"
 )
