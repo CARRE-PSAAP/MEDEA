@@ -55,7 +55,6 @@ To build and view the docs,
 
 ```bash
 cd docs
-doxygen Doxyfile
 make html
 open build/html/index.html
 ```

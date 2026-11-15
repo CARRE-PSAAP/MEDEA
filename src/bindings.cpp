@@ -142,7 +142,8 @@ RealArray sweep_kernel(IntArray order, IntArray blf_csr_i, IntArray blf_csr_j,
 
 PYBIND11_MODULE(_kernels, m) {
   m.doc() =
-      "MEDEA compiled kernels. Plain NumPy arrays in and out; no MFEM or MPI.";
+      "MEDEA compiled kernels. These contain plain Numpy arrays and do not "
+      "interface with MFEM or MPI";
 
   m.def("sweep_kernel", &sweep_kernel, py::arg("order"), py::arg("blf_csr_i"),
         py::arg("blf_csr_j"), py::arg("blf_csr_data"), py::arg("source_array"),

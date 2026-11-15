@@ -17,11 +17,7 @@ release = "0.0.0"
 extensions = [
     "sphinx.ext.autodoc",  # Extracts Python docstrings
     "sphinx.ext.viewcode",  # Adds links to source code
-    "breathe",  # Bridges Doxygen XML to Sphinx
 ]
-
-breathe_projects = {"MEDEA": "../build/doxygen/xml"}
-breathe_default_project = "MEDEA"
 
 templates_path = ["_templates"]
 exclude_patterns = []
