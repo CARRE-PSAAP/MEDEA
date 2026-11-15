@@ -74,10 +74,18 @@ class TransportSweep:
             if e2 < 0:
                 continue
 
-            face = mesh.GetFaceElementTransformations(face_id)
-            ip = mfem.Geometries.GetCenter(face.GetGeometryType())
-            face.SetIntPoint(ip)
-            mfem.CalcOrtho(face.Jacobian(), nor)
+            if sdim == 1:
+                # a point face has no tangent for CalcOrtho (it crashes); the
+                # normal points from element 1 toward element 2
+                c1, c2 = mfem.Vector(1), mfem.Vector(1)
+                mesh.GetElementCenter(e1, c1)
+                mesh.GetElementCenter(e2, c2)
+                nor[0] = 1.0 if c2[0] > c1[0] else -1.0
+            else:
+                face = mesh.GetFaceElementTransformations(face_id)
+                ip = mfem.Geometries.GetCenter(face.GetGeometryType())
+                face.SetIntPoint(ip)
+                mfem.CalcOrtho(face.Jacobian(), nor)
 
             elem1.append(e1)
             elem2.append(e2)

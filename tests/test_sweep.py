@@ -73,9 +73,34 @@ def _global_solve(fespace, a, b):
     return mfem.Vector(X.GetDataArray().copy())
 
 
-def _setup():
-    mesh = mfem.Mesh(4, 4, "TRIANGLE")
-    velocities = [mfem.Vector(v) for v in ANGLES]
+# Per-dimension meshes and angles. Each has >= 3 angles (some tests index angle 2),
+# and angle 2 is axis-aligned where that is meaningful.
+CASES = {
+    "1d": (
+        lambda: mfem.Mesh(8, 1.0),
+        [[1.0], [-1.0], [0.5]],
+    ),
+    "2d": (
+        lambda: mfem.Mesh(4, 4, "TRIANGLE"),
+        ANGLES,
+    ),
+    "3d": (
+        lambda: mfem.Mesh(3, 3, 3, "TETRAHEDRON"),
+        [
+            [0.3, 0.5, 0.812403840],  # generic direction
+            [-0.6, 0.48, -0.64],  # mixed signs
+            [1.0, 0.0, 0.0],  # axis-aligned
+        ],
+    ),
+}
+
+all_dims = pytest.mark.parametrize("dim", list(CASES))
+
+
+def _setup(dim="2d"):
+    make_mesh, angles = CASES[dim]
+    mesh = make_mesh()
+    velocities = [mfem.Vector(v) for v in angles]
 
     fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
     fespace = mfem.FiniteElementSpace(mesh, fec)
@@ -95,9 +120,10 @@ def _assert_matches_global_solve(fespace, a_list, b_list, indices, solutions):
         assert diff.Normlinf() < 1e-8, f"angle {k} differs from global solve"
 
 
-def test_sweep_equivalent_to_global_solve():
+@all_dims
+def test_sweep_equivalent_to_global_solve(dim):
     """Default sweep covers every angle, in the order they were given."""
-    mesh, velocities, fespace, a_list, b_list = _setup()
+    mesh, velocities, fespace, a_list, b_list = _setup(dim)
 
     ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
     solutions = ordinate.sweep(a_list, b_list)
@@ -107,9 +133,10 @@ def test_sweep_equivalent_to_global_solve():
     )
 
 
-def test_sweep_angle_subset():
+@all_dims
+def test_sweep_angle_subset(dim):
     """``sweep(..., range)`` solves only the angles indexed by the range."""
-    mesh, velocities, fespace, a_list, b_list = _setup()
+    mesh, velocities, fespace, a_list, b_list = _setup(dim)
 
     ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
 
@@ -139,9 +166,10 @@ def test_sweep_range_out_of_bounds():
         ordinate.sweep(a_list, b_list, angle_range=range(len(velocities) + 1))
 
 
-def test_sweep_out_written_in_place():
+@all_dims
+def test_sweep_out_written_in_place(dim):
     """Passing ``out`` fills those exact vectors and returns the same list."""
-    mesh, velocities, fespace, a_list, b_list = _setup()
+    mesh, velocities, fespace, a_list, b_list = _setup(dim)
     ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
 
     ndofs = fespace.GetNDofs()
@@ -161,8 +189,9 @@ def test_sweep_out_written_in_place():
     _assert_matches_global_solve(fespace, a_list, b_list, range(len(velocities)), out)
 
 
-def test_sweep_out_with_angle_subset():
-    mesh, velocities, fespace, a_list, b_list = _setup()
+@all_dims
+def test_sweep_out_with_angle_subset(dim):
+    mesh, velocities, fespace, a_list, b_list = _setup(dim)
     ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
 
     out = [mfem.Vector(fespace.GetNDofs())]
