@@ -17,6 +17,7 @@ release = "0.0.0"
 extensions = [
     "sphinx.ext.autodoc",  # Extracts Python docstrings
     "sphinx.ext.viewcode",  # Adds links to source code
+    'sphinx.ext.mathjax',  # render latex math
 ]
 
 templates_path = ["_templates"]

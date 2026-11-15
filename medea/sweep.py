@@ -13,14 +13,31 @@ from medea.kernels import k_sweep
 
 class TransportSweep:
     """
-    Object for creating mesh sweep orderings and performing the sweep.
-    The constructor uses the sign of (n dot angle), where n is the face normal vector,
-    to determine element coupling for a transport solve in the direction of ``angle``.
+    Object for creating mesh sweep orderings and performing the sweep. The constructor
+    finds a cell ordering based on DG upwinding: the sign of 
+    :math:`\\vec{\\Omega}\\cdot\\hat{n}` is used to determine the dependency between 
+    cells, where :math:`\\hat{n}` is the outward unit normal vector of a face.
+
+    .. note::
+
+        The cell ordering algorithm only works for meshes with flat faces, and 
+        :code:`sweep` only works for discontinuous discretizations.
+
     Kahn's Algorithm is then used to determine an ordering for those elements, where
     each dependency is visited before the element that needs it.
 
-    The ordering is based only on the unit normal vector of the face (not actual ``dof``
-    coupling), so for now the sweep ordering is only guaranteed for flat faces.
+    Create an ordering using
+
+    .. code-block:: python
+
+        sweeper = sweep.TransportSweep(mesh, fespace, angles)
+
+    then, invert a transport operator and write the result into :code:`psi` using
+
+    .. code-block:: python
+
+        sweeper.sweep(bilinear_forms, linear_forms, psi)
+
     """
 
     def __init__(
@@ -137,10 +154,12 @@ class TransportSweep:
         Sweep the mesh for the angles indexed by ``angle_range`` (default: all angles),
         using the orderings determined in ``__init__``. ``bilinear_forms[k]`` and
         ``linear_forms[k]`` are the pre-assembled forms for angle ``k``, so that their
-        data can be extracted.
+        data can be extracted. Note that the angles used here are the ones that were passed to
+        :code:`TransportSweep.__init__`.
 
-        If ``out`` is given, it must hold one vector of size ``ndofs`` per index in
-        ``angle_range``; each is overwritten in place with the solution for that angle.
+        If ``out`` is given, it must hold a list of :code:`mfem.Vector`s of size ``ndofs``,
+        where the list has as many entries as angles indexed in``angle_range``. Each :code:`Vector`
+        is overwritten in place with the solution for that angle.
         Otherwise new vectors are allocated.
 
         Returns ``out`` (or the newly allocated list), one solution per index in
