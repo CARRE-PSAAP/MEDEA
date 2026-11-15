@@ -5,30 +5,27 @@ reference here, so a faster rewrite can be trusted.
 """
 
 import numpy as np
-
 from numba import njit
 
-@njit
+
 def sweep(
     order: np.ndarray[np.int32],
     n_dofs: int,
     blf_csr_i: np.ndarray[np.int32],
     blf_csr_j: np.ndarray[np.int32],
     blf_csr_data: np.ndarray[np.float64],
-    source_array: np.ndarray[np.float64],
+    linear_form: np.ndarray[np.float64],
     elem_dof_offset: np.ndarray[np.int32],
     elem_dof_indices: np.ndarray[np.int32],
+    out: np.ndarray[np.float64],
 ) -> np.ndarray[np.float64]:
-
-    solution = np.zeros(n_dofs, dtype=np.float64)
-
     for e in order:
         start = elem_dof_offset[e]
         end = elem_dof_offset[e + 1]
         dofs = elem_dof_indices[start:end]
 
         local_matrix = np.zeros((dofs.size, dofs.size), dtype=np.float64)
-        local_rhs = source_array[dofs]
+        local_rhs = linear_form[dofs]
 
         for i, d in enumerate(dofs):
             start = blf_csr_i[d]
@@ -44,10 +41,8 @@ def sweep(
                         found = True
                         break
                 if found is False:
-                    local_rhs[i] -= v * solution[c]
-        solution[dofs] = np.linalg.solve(local_matrix, local_rhs)
-
-    return(solution)
+                    local_rhs[i] -= v * out[c]
+        out[dofs] = np.linalg.solve(local_matrix, local_rhs)
 
 
 def sweep_toy(order, up_offsets, up_cells, up_weights, sigma, source):

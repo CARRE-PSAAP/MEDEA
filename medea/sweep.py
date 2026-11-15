@@ -8,7 +8,7 @@ from collections import deque
 import numpy as np
 
 from medea._backend import mfem
-from medea._reference import sweep as _sweep
+from medea._kernels import sweep_kernel
 
 
 class TransportSweep:
@@ -201,24 +201,15 @@ class TransportSweep:
 
         # end data preparation
 
-        # ============ #
-        # Kernel start #
-        # ============ #
-
-        ndofs = bilinear_form.FESpace().GetNDofs()
-        solution.GetDataArray()[:] = _sweep(
+        sweep_kernel(
             order,
-            ndofs,
             I,
             J,
             D,
-            linear_form.GetDataArray(),
+            b,
             self._elem_dof_offsets,
             self._elem_dof_indices,
+            solution.GetDataArray()[:],
         )
-
-        # ============ #
-        # Kernel end   #
-        # ============ #
 
         return solution
