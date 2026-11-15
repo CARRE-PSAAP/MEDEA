@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["mfem>=4.10", "numpy", "numba"]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-mpi", "black<27"]
+dev = ["pytest", "pytest-mpi", "black<27", "scipy"]
 parallel = ["mpi4py", "pytest-mpi"]
 docs = ["sphinx", "sphinx-rtd-theme"]
 

@@ -39,12 +39,18 @@ MAX_ITERATIONS = 500
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--tet", action="store_true", help="use the triangle mesh")
+    parser.add_argument("--order", type=int, default=1, help="DFEM order")
+
     mesh_file = "cubesat_2d.msh" if parser.parse_args().tet else "cubesat_2d_hex.mesh"
+    DG_ORDER = parser.parse_args().order
+    if DG_ORDER < 0:
+        raise ValueError("--order must be a non-negative integer")
+
     start = time.perf_counter()
 
     mesh = mfem.Mesh(str(DATA / mesh_file))
     angles, weights = s6_quadrature()
-    fec = mfem.DG_FECollection(1, 2, mfem.BasisType.GaussLobatto)
+    fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
 
     # Set up constant values: LHS, isotropic scattering operator, BC

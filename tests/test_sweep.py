@@ -5,6 +5,8 @@ depend on how many ranks the suite is launched with.
 """
 
 import pytest
+import scipy.sparse as sp
+import scipy.sparse.linalg as spla
 
 import medea
 from medea._backend import mfem
@@ -53,7 +55,7 @@ def _build_forms(fespace, velocity):
 
 
 def _global_solve(fespace, a, b):
-    """Reference solution of ``a x = b`` using GMRES on the full system."""
+    """Reference solution of ``a x = b`` using a sparse direct solve."""
     x = mfem.GridFunction(fespace)
     x.Assign(0.0)
 
@@ -64,13 +66,16 @@ def _global_solve(fespace, a, b):
     ess_tdof_list = mfem.intArray()
     a.FormLinearSystem(ess_tdof_list, x, b, A, X, B)
 
+    # PyMFEM is not built with UMFPACK, so factor the CSR matrix with SciPy
     AA = mfem.OperatorHandle2SparseMatrix(A)
-    M = mfem.GSSmoother(AA)
-    mfem.GMRES(AA, M, B, X, 0, 500, 200, 0, 1e-16)
+    csr = sp.csr_matrix(
+        (AA.GetDataArray(), AA.GetJArray(), AA.GetIArray()),
+        shape=(AA.Height(), AA.Width()),
+    )
+    X = mfem.Vector(spla.spsolve(csr.tocsc(), B.GetDataArray()))
     a.RecoverFEMSolution(X, b, x)
 
-    # X can alias the data of the local GridFunction x, so return a copy
-    return mfem.Vector(X.GetDataArray().copy())
+    return X
 
 
 # Per-dimension meshes and angles. Each has >= 3 angles (some tests index angle 2),
@@ -95,14 +100,15 @@ CASES = {
 }
 
 all_dims = pytest.mark.parametrize("dim", list(CASES))
+order012 = pytest.mark.parametrize("dg_order", [0, 1, 2])
 
 
-def _setup(dim="2d"):
+def _setup(dim="2d", dg_order=1):
     make_mesh, angles = CASES[dim]
     mesh = make_mesh()
     velocities = [mfem.Vector(v) for v in angles]
 
-    fec = mfem.DG_FECollection(1, mesh.Dimension(), mfem.BasisType.GaussLobatto)
+    fec = mfem.DG_FECollection(dg_order, mesh.Dimension(), mfem.BasisType.GaussLobatto)
     fespace = mfem.FiniteElementSpace(mesh, fec)
 
     forms = [_build_forms(fespace, v) for v in velocities]
@@ -121,9 +127,10 @@ def _assert_matches_global_solve(fespace, a_list, b_list, indices, solutions):
 
 
 @all_dims
-def test_sweep_equivalent_to_global_solve(dim):
+@order012
+def test_sweep_equivalent_to_global_solve(dim, dg_order):
     """Default sweep covers every angle, in the order they were given."""
-    mesh, velocities, fespace, a_list, b_list = _setup(dim)
+    mesh, velocities, fespace, a_list, b_list = _setup(dim, dg_order)
 
     ordinate = medea.sweep.TransportSweep(mesh, fespace, velocities)
     solutions = ordinate.sweep(a_list, b_list)
