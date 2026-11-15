@@ -16,7 +16,7 @@ jobs:
       # The kernels take plain arrays, so one build must serve serial and parallel.
       - name: Kernels must not link MFEM or MPI
         run: |
-          so=$(python -c "import medea._kernels as k; print(k.__file__)")
+          so=$(python -c "import medea.kernels as k; print(k.__file__)")
           readelf -d "$so" | grep NEEDED
           if readelf -d "$so" | grep -E "libmfem|libmpi"; then
             echo "error: $so links MFEM or MPI" >&2
