@@ -26,7 +26,7 @@ class TransportSweep:
     def __init__(
         self,
         mesh: mfem.Mesh,
-        fespace: mfem.FESpace,
+        fespace: mfem.FiniteElementSpace,
         angles: mfem.Vector | list[mfem.Vector],
     ):
         # a single angle is treated as a list of one
