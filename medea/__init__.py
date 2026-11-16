@@ -2,6 +2,7 @@
 
 from ._backend import MFEM_MODE  # "ser" or "par": which PyMFEM module is in use
 import medea.sweep
+from medea._backend import mfem
 
 try:
     from . import kernels
