@@ -22,7 +22,9 @@ def unit_vectors_2d(n):
 
 def unit_vectors_3d():
     s = 1 / np.sqrt(3)
-    return [[sx * s, sy * s, sz * s] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+    return [
+        [sx * s, sy * s, sz * s] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)
+    ]
 
 
 def values(qs):
@@ -185,7 +187,9 @@ class TestGaussLegendre:
 
     def test_known_s2(self):
         qs = gauss_legendre(2)
-        np.testing.assert_allclose(np.sort(values(qs)[:, 0]), [-1 / np.sqrt(3), 1 / np.sqrt(3)])
+        np.testing.assert_allclose(
+            np.sort(values(qs)[:, 0]), [-1 / np.sqrt(3), 1 / np.sqrt(3)]
+        )
         np.testing.assert_allclose(qs.weights, [1.0, 1.0])
 
     @pytest.mark.parametrize("N", [-1, 0, 1])
@@ -270,7 +274,9 @@ class TestGaussLobatto:
         mu = values(qs)[:, 0]
         order = np.argsort(mu)
         np.testing.assert_allclose(mu[order], -mu[order][::-1], atol=1e-12)
-        np.testing.assert_allclose(qs.weights[order], qs.weights[order][::-1], atol=1e-12)
+        np.testing.assert_allclose(
+            qs.weights[order], qs.weights[order][::-1], atol=1e-12
+        )
 
     def test_known_s4(self):
         # nodes +-1, +-1/sqrt(5); weights 1/6, 5/6
@@ -279,7 +285,9 @@ class TestGaussLobatto:
         np.testing.assert_allclose(
             values(qs)[order, 0], [-1, -1 / np.sqrt(5), 1 / np.sqrt(5), 1], atol=1e-12
         )
-        np.testing.assert_allclose(qs.weights[order], [1 / 6, 5 / 6, 5 / 6, 1 / 6], atol=1e-12)
+        np.testing.assert_allclose(
+            qs.weights[order], [1 / 6, 5 / 6, 5 / 6, 1 / 6], atol=1e-12
+        )
 
     @pytest.mark.parametrize("N", [-1, 0, 1])
     def test_too_small(self, N):
@@ -310,7 +318,9 @@ class TestLevelSymmetric:
 
     @pytest.mark.parametrize("N", ORDERS)
     def test_unit_vectors(self, N):
-        np.testing.assert_allclose(np.linalg.norm(values(level_symmetric(N, 3)), axis=1), 1.0)
+        np.testing.assert_allclose(
+            np.linalg.norm(values(level_symmetric(N, 3)), axis=1), 1.0
+        )
 
     @pytest.mark.parametrize("N", ORDERS)
     def test_level_symmetric_cosines(self, N):
@@ -319,7 +329,9 @@ class TestLevelSymmetric:
         levels = np.unique(np.round(np.abs(mu), 10))
         assert len(levels) == N // 2
         if N > 2:
-            np.testing.assert_allclose(np.diff(levels**2), np.diff(levels**2)[0], rtol=1e-6)
+            np.testing.assert_allclose(
+                np.diff(levels**2), np.diff(levels**2)[0], rtol=1e-6
+            )
 
     @pytest.mark.parametrize("N", ORDERS)
     def test_moments_3d(self, N):

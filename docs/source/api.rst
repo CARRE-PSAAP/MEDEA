@@ -14,3 +14,14 @@ Python API
 
 .. autoclass:: medea.sweep.TransportSweep
    :members:
+
+.. autoclass:: medea.quadrature.QuadratureSet
+   :members:
+
+.. autofunction:: medea.quadrature.gauss_legendre
+
+.. autofunction:: medea.quadrature.double_gauss
+
+.. autofunction:: medea.quadrature.gauss_lobatto
+
+.. autofunction:: medea.quadrature.level_symmetric
