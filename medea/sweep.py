@@ -14,13 +14,13 @@ from medea.kernels import k_sweep
 class TransportSweep:
     """
     Object for creating mesh sweep orderings and performing the sweep. The constructor
-    finds a cell ordering based on DG upwinding: the sign of 
-    :math:`\\vec{\\Omega}\\cdot\\hat{n}` is used to determine the dependency between 
+    finds a cell ordering based on DG upwinding: the sign of
+    :math:`\\vec{\\Omega}\\cdot\\hat{n}` is used to determine the dependency between
     cells, where :math:`\\hat{n}` is the outward unit normal vector of a face.
 
     .. note::
 
-        The cell ordering algorithm only works for meshes with flat faces, and 
+        The cell ordering algorithm only works for meshes with flat faces, and
         :code:`sweep` only works for discontinuous discretizations.
 
     Kahn's Algorithm is then used to determine an ordering for those elements, where

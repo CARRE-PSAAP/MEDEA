@@ -28,7 +28,7 @@ def sweep(
 
         local_matrix = np.zeros((dofs.size, dofs.size), dtype=np.float64)
         local_rhs = linear_form[dofs]
-        
+
         # for each local dof (row in bilinear form)
         for i, d in enumerate(dofs):
             start = blf_csr_i[d]
@@ -39,7 +39,7 @@ def sweep(
             # for each value in this row
             for c, v in zip(cols, vals):
                 found = False
-                
+
                 # check if local
                 for j, dp in enumerate(dofs):
                     if c == dp:
@@ -49,4 +49,3 @@ def sweep(
                 if found is False:
                     local_rhs[i] -= v * out[c]
         out[dofs] = np.linalg.solve(local_matrix, local_rhs)
-
