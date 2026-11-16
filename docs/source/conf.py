@@ -18,6 +18,7 @@ extensions = [
     "sphinx.ext.autodoc",  # Extracts Python docstrings
     "sphinx.ext.viewcode",  # Adds links to source code
     "breathe",  # Bridges Doxygen XML to Sphinx
+    "sphinx.ext.mathjax",  # render latex math
 ]
 
 breathe_projects = {"MEDEA": "../build/doxygen/xml"}
