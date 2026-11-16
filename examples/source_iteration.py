@@ -46,6 +46,11 @@ def main():
     if DG_ORDER < 0:
         raise ValueError("--order must be a non-negative integer")
 
+    if Path(DATA / mesh_file).exists() == False:
+        raise ValueError(
+            f"Mesh file does not exist at {Path(DATA / mesh_file)}. Generate using `python cubesat.py`"
+        )
+
     start = time.perf_counter()
 
     mesh = mfem.Mesh(str(DATA / mesh_file))
