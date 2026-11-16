@@ -126,7 +126,7 @@ def double_gauss(N: int) -> QuadratureSet:
 
 def gauss_lobatto(N: int) -> QuadratureSet:
     """
-    Generate Gauss-Lobtatto quadrature for 1D geometry. The set has N angle cosines,
+    Generate Gauss-Lobatto quadrature for 1D geometry. The set has N angle cosines,
     which always include -1 and 1.
     """
     if N < 2:
