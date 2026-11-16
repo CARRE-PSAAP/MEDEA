@@ -69,7 +69,7 @@ def main():
     quad = level_symmetric(6, dim=2)
     angles = quad.angles
     weights = quad.weights
-    
+
     fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
 

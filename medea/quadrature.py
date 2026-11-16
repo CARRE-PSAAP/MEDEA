@@ -8,7 +8,18 @@ from medea import mfem
 
 VectorLike = mfem.Vector | list[float] | np.ndarray[np.floating]
 
+
 class QuadratureSet:
+    """
+    Contains a :code:`list` of angles and a :code:`list` of weights, where the angles
+    are stored as :code:`mfem.Vector`s.
+
+    The angles and weights can be accessed using :code:`quad.angles` and 
+    :code:`quad.weights`. :code:`quad.dim` is the dimension (1,2,3) of each angle.
+
+    1D quadrature weights are normalized to 2, and 2/3D weights are normalized to 
+    :math:`2\pi`.
+    """
     def __init__(
         self,
         angles: list[VectorLike] | list[float],
@@ -65,7 +76,11 @@ class QuadratureSet:
 
         self.name = name
 
+
 def gauss_legendre(N: int) -> QuadratureSet:
+    """
+    Generate Gauss-Legendre quadrature for 1D geometry, with N angle cosines.
+    """
     if N < 2:
         raise ValueError("N must be at least 2")
     if N % 2 != 0:
@@ -73,14 +88,28 @@ def gauss_legendre(N: int) -> QuadratureSet:
     mu, w = np.polynomial.legendre.leggauss(N)
     return QuadratureSet([mfem.Vector([m]) for m in mu], w, f"S{N} Gauss-Legendre")
 
+
 def double_gauss(N: int) -> QuadratureSet:
-    if N < 1: 
+    """
+    Generate double Gauss-Legendre quadrature for 1D geometry. The set has 2N angle
+    cosines, where each half of the domains uses a shifted N-point quadrature set
+    """
+    if N < 1:
         raise ValueError("N must be at least 1")
     mu, w = np.polynomial.legendre.leggauss(N)
 
-    return QuadratureSet(np.append((mu-1)/2, (mu+1)/2), np.append(w/2, w/2), f"Double S{N} Gauss-Legendre")
+    return QuadratureSet(
+        np.append((mu - 1) / 2, (mu + 1) / 2),
+        np.append(w / 2, w / 2),
+        f"Double S{N} Gauss-Legendre",
+    )
+
 
 def gauss_lobatto(N: int) -> QuadratureSet:
+    """
+    Generate Gauss-Lobtatto quadrature for 1D geometry. The set has N angle cosines, 
+    which always include -1 and 1.
+    """
     if N < 2:
         raise ValueError("N must be at least 2")
     if N % 2 != 0:
@@ -99,10 +128,10 @@ def gauss_lobatto(N: int) -> QuadratureSet:
     weights = 2.0 / (N * (N - 1) * (P(nodes) ** 2))
     return QuadratureSet(nodes.real, weights.real, f"{N}-point Gauss-Lobatto")
 
+
 def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
-    """Level-symmetric (LQn) quadrature normalized to 4*pi (Ref. Lewis and Miller
-    Computational Method of Neutron Transport)"
-    """
+    """Level-symmetric (LQn) quadrature normalized to 4*pi (Ref. Lewis and 
+    Miller, Computational Method of Neutron Transport)"""
     if dim not in (2, 3):
         raise ValueError(f"'dim' must be 2 or 3 (got {dim})")
     if N < 2 or N % 2:
@@ -121,11 +150,21 @@ def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
         even-moment equations (Eq. 13, 18) for k >= l, k + l <= order."""
         mu = np.sqrt(np.linspace(mu1_sq, 1 - 2 * mu1_sq, n))
         kk, ll = np.array(
-            [(a, b) for a in range(0, order + 1, 2) for b in range(0, a + 1, 2) if a + b <= order]
+            [
+                (a, b)
+                for a in range(0, order + 1, 2)
+                for b in range(0, a + 1, 2)
+                if a + b <= order
+            ]
         ).T
         A = (mu[i][:, None] ** kk * mu[j][:, None] ** ll).T @ onehot
-        B = [0.5 * gamma((a + 1) / 2) * gamma((b + 1) / 2) / (sqrt(pi) * gamma((a + b + 3) / 2))
-             for a, b in zip(kk, ll)]
+        B = [
+            0.5
+            * gamma((a + 1) / 2)
+            * gamma((b + 1) / 2)
+            / (sqrt(pi) * gamma((a + b + 3) / 2))
+            for a, b in zip(kk, ll)
+        ]
         P = np.linalg.lstsq(A, B, rcond=None)[0]
         return mu, P, np.linalg.norm(A @ P - B)
 
@@ -144,7 +183,9 @@ def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
 
     mu, P, resid = fit(mu1_sq, N - 2)
     if resid > 1e-8:
-        warnings.warn(f"Level-symmetric S{N} moment equations are inconsistent (residual {resid:.2e})")
+        warnings.warn(
+            f"Level-symmetric S{N} moment equations are inconsistent (residual {resid:.2e})"
+        )
     if np.any(P < 0):
         warnings.warn(f"Level-symmetric S{N} has negative weights")
 
