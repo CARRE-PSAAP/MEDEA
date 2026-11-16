@@ -11,6 +11,7 @@ from medea.quadrature import (
     double_gauss,
     gauss_legendre,
     gauss_lobatto,
+    level_symmetric,
 )
 
 
@@ -289,3 +290,95 @@ class TestGaussLobatto:
         with pytest.warns(UserWarning, match="Gauss-Lobatto"):
             qs = gauss_lobatto(5)
         assert len(qs.angles) == 5
+
+
+class TestLevelSymmetric:
+    # The autouse fixture turns any UserWarning into a failure, so every test
+    # below that doesn't use pytest.warns also checks that no warning is emitted.
+    ORDERS = [2, 4, 6, 8, 10, 12, 16]
+
+    @pytest.mark.parametrize("dim", [2, 3])
+    @pytest.mark.parametrize("N", ORDERS)
+    def test_structure(self, N, dim):
+        qs = level_symmetric(N, dim)
+        assert qs.dim == dim
+        assert qs.name == f"S{N} level-symmetric"
+        n_octant = N * (N + 2) // 8
+        assert len(qs.angles) == len(qs.weights) == n_octant * 2**dim
+        assert qs.weights.sum() == pytest.approx(4 * np.pi)
+        assert np.all(qs.weights > 0)
+
+    @pytest.mark.parametrize("N", ORDERS)
+    def test_unit_vectors(self, N):
+        np.testing.assert_allclose(np.linalg.norm(values(level_symmetric(N, 3)), axis=1), 1.0)
+
+    @pytest.mark.parametrize("N", ORDERS)
+    def test_level_symmetric_cosines(self, N):
+        # One set of N/2 cosines is shared by all axes, equally spaced in mu^2
+        mu = values(level_symmetric(N, 3))
+        levels = np.unique(np.round(np.abs(mu), 10))
+        assert len(levels) == N // 2
+        if N > 2:
+            np.testing.assert_allclose(np.diff(levels**2), np.diff(levels**2)[0], rtol=1e-6)
+
+    @pytest.mark.parametrize("N", ORDERS)
+    def test_moments_3d(self, N):
+        qs = level_symmetric(N, 3)
+        w, mu = qs.weights, values(qs)
+        np.testing.assert_allclose(w @ mu, 0.0, atol=1e-12)  # flow condition
+        np.testing.assert_allclose(w @ mu**2, 4 * np.pi / 3)  # diffusion condition
+        # Even moments up to order N-2 match the sphere integral of mu^2 eta^2 = 4pi/15
+        if N >= 6:
+            assert w @ (mu[:, 0] ** 2 * mu[:, 1] ** 2) == pytest.approx(4 * np.pi / 15)
+
+    @pytest.mark.parametrize("N", ORDERS)
+    def test_reflection_symmetry(self, N):
+        qs = level_symmetric(N, 3)
+        mu = values(qs)
+        for axis in range(3):
+            flip = mu.copy()
+            flip[:, axis] *= -1
+            # every direction's mirror image exists with the same weight
+            lookup = {tuple(np.round(m, 9)): w for m, w in zip(mu, qs.weights)}
+            for m, w in zip(flip, qs.weights):
+                assert lookup[tuple(np.round(m, 9))] == pytest.approx(w)
+
+    @pytest.mark.parametrize("N", ORDERS)
+    def test_axis_permutation_symmetry(self, N):
+        qs = level_symmetric(N, 3)
+        mu = values(qs)
+        lookup = {tuple(np.round(m, 9)): w for m, w in zip(mu, qs.weights)}
+        for perm in ([1, 0, 2], [2, 1, 0], [0, 2, 1]):
+            for m, w in zip(mu[:, perm], qs.weights):
+                assert lookup[tuple(np.round(m, 9))] == pytest.approx(w)
+
+    @pytest.mark.parametrize("N", [4, 8])
+    def test_2d_matches_3d_projection(self, N):
+        q2, q3 = level_symmetric(N, 2), level_symmetric(N, 3)
+        # Folding xi=+-: the 2D set is the 3D set projected onto (mu, eta)
+        proj = {}
+        for m, w in zip(values(q3), q3.weights):
+            key = tuple(np.round(m[:2], 9))
+            proj[key] = proj.get(key, 0.0) + w
+        assert len(proj) == len(q2.angles)
+        for m, w in zip(values(q2), q2.weights):
+            assert proj[tuple(np.round(m, 9))] == pytest.approx(w)
+
+    def test_default_dim_is_3(self):
+        assert level_symmetric(4).dim == 3
+
+    def test_high_order_negative_weights_warn(self):
+        with pytest.warns(UserWarning, match="negative weights"):
+            qs = level_symmetric(20, 3)
+        assert qs.weights.sum() == pytest.approx(4 * np.pi)
+        assert np.any(qs.weights < 0)
+
+    @pytest.mark.parametrize("dim", [1, 4, 0])
+    def test_invalid_dim(self, dim):
+        with pytest.raises(ValueError, match="'dim' must be 2 or 3"):
+            level_symmetric(4, dim)
+
+    @pytest.mark.parametrize("N", [-2, 0, 1, 3, 5])
+    def test_invalid_N(self, N):
+        with pytest.raises(ValueError, match="even integer"):
+            level_symmetric(N, 3)

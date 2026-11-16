@@ -1,4 +1,6 @@
 import warnings
+from itertools import product
+from math import gamma, pi, sqrt
 
 import numpy as np
 
@@ -96,3 +98,60 @@ def gauss_lobatto(N: int) -> QuadratureSet:
     # Compute weights
     weights = 2.0 / (N * (N - 1) * (P(nodes) ** 2))
     return QuadratureSet(nodes.real, weights.real, f"{N}-point Gauss-Lobatto")
+
+def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
+    """Level-symmetric (LQn) quadrature normalized to 4*pi (Ref. Lewis and Miller
+    Computational Method of Neutron Transport)"
+    """
+    if dim not in (2, 3):
+        raise ValueError(f"'dim' must be 2 or 3 (got {dim})")
+    if N < 2 or N % 2:
+        raise ValueError(f"N must be an even integer >= 2 (got {N})")
+
+    # Principal-octant points (0-based level indices i+j+k = n-1); points that
+    # are permutations of each other share a weight (class id in `cls`)
+    n = N // 2
+    i, j = np.nonzero(np.add.outer(np.arange(n), np.arange(n)) < n)
+    k = n - 1 - i - j
+    cls = np.unique(np.sort([i, j, k], axis=0), axis=1, return_inverse=True)[1].ravel()
+    onehot = np.eye(cls.max() + 1)[cls]
+
+    def fit(mu1_sq, order):
+        """Cosines (Eq. 8, 9), class weights (octant sum 1) and residual of the
+        even-moment equations (Eq. 13, 18) for k >= l, k + l <= order."""
+        mu = np.sqrt(np.linspace(mu1_sq, 1 - 2 * mu1_sq, n))
+        kk, ll = np.array(
+            [(a, b) for a in range(0, order + 1, 2) for b in range(0, a + 1, 2) if a + b <= order]
+        ).T
+        A = (mu[i][:, None] ** kk * mu[j][:, None] ** ll).T @ onehot
+        B = [0.5 * gamma((a + 1) / 2) * gamma((b + 1) / 2) / (sqrt(pi) * gamma((a + b + 3) / 2))
+             for a, b in zip(kk, ll)]
+        P = np.linalg.lstsq(A, B, rcond=None)[0]
+        return mu, P, np.linalg.norm(A @ P - B)
+
+    if N == 2:
+        mu1_sq = 1 / 3
+    else:
+        # Pick mu_1 so the moments through k+l = N hold too: find the first
+        # local minimum of the residual on a grid, then zoom in on it.
+        xs = np.geomspace(1e-4, 1 / 3 - 1e-6, 400)
+        r = np.array([fit(x, N)[2] for x in xs])
+        m = np.flatnonzero((r[1:-1] <= r[:-2]) & (r[1:-1] <= r[2:]))[0] + 1
+        for _ in range(10):
+            xs = np.linspace(xs[m - 1], xs[m + 1], 21)
+            m = np.clip(np.argmin([fit(x, N)[2] for x in xs]), 1, 19)
+        mu1_sq = xs[m]
+
+    mu, P, resid = fit(mu1_sq, N - 2)
+    if resid > 1e-8:
+        warnings.warn(f"Level-symmetric S{N} moment equations are inconsistent (residual {resid:.2e})")
+    if np.any(P < 0):
+        warnings.warn(f"Level-symmetric S{N} has negative weights")
+
+    # Reflect the octant into all 2^dim sign combinations (dim=2 keeps xi > 0
+    # and folds the mirrored xi < 0 directions into the weights)
+    signs = np.array(list(product((-1, 1), repeat=dim)))
+    octant = mu[np.array([i, j, k]).T[:, :dim]]
+    angles = (signs[:, None, :] * octant[None]).reshape(-1, dim)
+    weights = np.tile(4 * pi * P[cls] / len(signs), len(signs))
+    return QuadratureSet(list(angles), weights, f"S{N} level-symmetric")
