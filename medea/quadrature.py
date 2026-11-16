@@ -55,9 +55,9 @@ class QuadratureSet:
 
         match self.dim:
             case 1:
-                self.weights = _normalize(self.weights, 2.0, 5, 8)
+                self.weights = _normalize(self.weights, 2.0, 8, 5)
             case 2 | 3:
-                self.weights = _normalize(self.weights, 4 * np.pi, 5, 8)
+                self.weights = _normalize(self.weights, 4 * np.pi, 8, 5)
             case _:
                 raise ValueError(f"Invalid angle dimension {self.dim}")
 
@@ -82,7 +82,7 @@ def gauss_lobatto(N: int) -> QuadratureSet:
     if N < 2:
         raise ValueError("N must be at least 2")
     if N % 2 != 0:
-        warnings.warn("N is odd in Gauss-Legendre quadrature set", category=UserWarning)
+        warnings.warn("N is odd in Gauss-Lobatto quadrature set", category=UserWarning)
 
     # Construct Legendre polynomial P_{n-1}(x)
     c = np.zeros(N)
