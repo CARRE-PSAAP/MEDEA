@@ -18,6 +18,8 @@ extensions = [
     "sphinx.ext.autodoc",  # Extracts Python docstrings
     "sphinx.ext.viewcode",  # Adds links to source code
     "sphinx.ext.mathjax",  # render latex math
+    "sphinx_proof",
+    "sphinx_math_dollar",
 ]
 
 templates_path = ["_templates"]
@@ -28,4 +30,8 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]
+html_static_path = ['_static']
+
+html_css_files = [
+    'css/custom.css',
+]

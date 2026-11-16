@@ -1,0 +1,34 @@
+/* sphinx-proof is styled for the pydata theme; these rules adapt its
+   admonition-based blocks to sphinx_rtd_theme. Remove if switching to pydata*/
+
+/* Shared: neutral title bar instead of RTD's white-on-blue admonition title */
+.rst-content div.proof > p.admonition-title {
+    color: #222;
+    background: transparent;
+    font-weight: 600;
+}
+.rst-content div.proof > p.admonition-title .caption-number {
+    font-weight: 700;
+}
+
+/* Algorithm: unboxed, ruled above and below the title (textbook style) */
+.rst-content div.algorithm {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid #ccc;
+    padding: 0;
+    margin: 24px 0;
+}
+.rst-content div.algorithm > p.admonition-title {
+    margin: 0;
+    padding: 6px 4px;
+    border-top: 2px solid #ccc;
+    border-bottom: 1px solid #ccc;
+}
+.rst-content div.algorithm > section.algorithm-content {
+    padding: 8px 4px 4px;
+    color: #222;
+}
+.rst-content div.algorithm > section.algorithm-content > :last-child {
+    margin-bottom: 8px;
+}
