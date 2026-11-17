@@ -133,7 +133,9 @@ class MaterialData:
 
         self._data = {}
         for rxn in reactions:
-            arrs = [np.asarray(materials[n][rxn], dtype=np.float64) for n in self._names]
+            arrs = [
+                np.asarray(materials[n][rxn], dtype=np.float64) for n in self._names
+            ]
             shape = arrs[0].shape
             for n, a in zip(self._names, arrs):
                 if a.shape != shape:

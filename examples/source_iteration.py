@@ -73,7 +73,9 @@ def main():
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
 
     # Set up constant values: LHS, isotropic scattering operator, BC
-    transport = streaming_collision_operators(space, angles, MATERIALS)  # Omega.nabla + sigma_t
+    transport = streaming_collision_operators(
+        space, angles, MATERIALS
+    )  # Omega.nabla + sigma_t
     incident = incident_flux_sources(space, angles)  # boundary inflow, per direction
     scattering = scattering_operator(space, MATERIALS)  # phi -> sigma_s * phi
 

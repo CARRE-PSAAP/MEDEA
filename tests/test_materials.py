@@ -225,7 +225,9 @@ def test_integer_index_selects_leading_non_material_axis(mats):
 def test_chained_and_tuple_indexing_agree(mats):
     s = mats["scatter"]
     np.testing.assert_array_equal(s[1][0][1].array, s[1, 0, 1].array)
-    np.testing.assert_array_equal(s[1, 0, 1].array, [SCATTER_A[1, 0, 1], SCATTER_B[1, 0, 1]])
+    np.testing.assert_array_equal(
+        s[1, 0, 1].array, [SCATTER_A[1, 0, 1], SCATTER_B[1, 0, 1]]
+    )
 
 
 def test_slice_and_ellipsis_indexing_keep_material_axis_first(mats):
