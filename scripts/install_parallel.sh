@@ -36,5 +36,5 @@ cd "$(mktemp -d)"
 python - <<'PY'
 import medea
 assert medea.MFEM_MODE == "par", medea.MFEM_MODE
-print("OK: MEDEA is using parallel MFEM:", medea.hello_mfem().mfem_version)
+print("OK: MEDEA is using parallel MFEM:")
 PY

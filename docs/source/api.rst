@@ -2,18 +2,8 @@ API
 ===
 
 
-C++ API Reference Example
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Python API
+~~~~~~~~~~
 
-.. doxygenfunction:: medea::sweep_toy
-   :project: MEDEA
-
-Python API Reference Example
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autofunction:: medea.hello_mfem
-
-.. autoclass:: medea.HelloResult
+.. autoclass:: medea.sweep.TransportSweep
    :members:
-
-.. autofunction:: medea.sweep_toy
