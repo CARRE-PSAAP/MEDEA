@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Added
 
+
+- Add quadrature class and helpers to generate quad angles and weights
 - Add material classes to manage multigroup cross section data and convert to MFEM coefficients, from [@hansenkyle]
 - Add `sweep` kernel to create sweep ordering for general meshes and perform block forward substitution to invert transport operator, from [@hansenkyle]
 - Add Sphinx documentation, from [@hansenkyle]
