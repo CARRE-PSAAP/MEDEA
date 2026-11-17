@@ -21,7 +21,7 @@ class QuadratureSet:
     :vartype name: str
 
     1D quadrature weights are normalized to 2, and 2/3D weights are normalized to
-    :math:`4\pi`.
+    :math:`4\\pi`.
 
     .. code-block:: python
 
