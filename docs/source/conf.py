@@ -19,7 +19,10 @@ extensions = [
     "sphinx.ext.viewcode",  # Adds links to source code
     "breathe",  # Bridges Doxygen XML to Sphinx
     "sphinx.ext.mathjax",  # render latex math
+    "sphinxcontrib.bibtex"
 ]
+
+bibtex_bibfiles = ['refs.bib']
 
 breathe_projects = {"MEDEA": "../build/doxygen/xml"}
 breathe_default_project = "MEDEA"
@@ -33,3 +36,13 @@ exclude_patterns = []
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+# -- MathJax formatting configuration -------------------------------------------------
+
+mathjax3_config = {
+    'tex': {
+        'macros': {
+            'vec': [r'{\boldsymbol{#1}}', 1],
+        }
+    }
+}

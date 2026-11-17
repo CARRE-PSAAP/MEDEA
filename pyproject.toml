@@ -13,7 +13,7 @@ dependencies = ["mfem>=4.10", "numpy", "numba"]
 [project.optional-dependencies]
 dev = ["pytest", "pytest-mpi", "black<27"]
 parallel = ["mpi4py", "pytest-mpi"]
-docs = ["sphinx", "breathe", "sphinx-rtd-theme"]
+docs = ["sphinx", "breathe", "sphinx-rtd-theme", "sphinxcontrib-bibtex"]
 
 [tool.scikit-build]
 wheel.packages = ["medea"]
