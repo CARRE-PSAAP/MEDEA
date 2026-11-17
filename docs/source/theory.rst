@@ -62,7 +62,7 @@ The steady-state transport problem in 3D geometry with incoming flux boundary co
 
     \begin{gathered}
         \mathcal{L}\psi = \mathcal{S}\psi + Q_{ext}(\vec{r}, \vec{\Omega}, E), \vec{\Omega}, E), \quad \vec{r} \in \Gamma, \vec{\Omega} \in  \mathbb{S}^2, E \in [0, \infty)\\
-        \psi(\vec{r}, \vec{\Omega}, E) = \psi_{in}(\vec{r}_\gamma, \vec{\Omega}, E), \quad \vec{\Omega} \cdot \vec{n}_e < 0, \vec{r} \in \partial\Gamma
+        \psi(\vec{r}, \vec{\Omega}, E) = \psi_{in}(\vec{r}, \vec{\Omega}, E), \quad \vec{\Omega} \cdot \vec{n}_e < 0, \vec{r} \in \partial\Gamma
     \end{gathered}
 
 where :math:`\partial\Gamma` is the domain boundary, :math:`\vec{n}_e` is the outward normal unit vector at the domain boundary, and :math:`\psi_{in}` is the known incoming flux, which may be zero. 
