@@ -214,8 +214,8 @@ class MaterialProperty:
 class MaterialGroup:
     r"""A set of :class:`Material` objects assigned to mesh attributes.
 
-    :param \*materials: :class:`Material` objects; names must be unique, and all materials must
-        have the same properties, shapes and ``n_groups``.
+    :param *materials: :class:``Material`` objects; Names must be unique, and all materials must
+        have the same properties (cross sections) and shape.
     :param attributes: ``{mesh_attribute: material}`` where each material is a
         ``Material`` from this group or its name. Keys are positive
         integers. A material may be mapped to several attributes, and materials may be
