@@ -11,15 +11,34 @@ VectorLike = mfem.Vector | list[float] | np.ndarray[np.floating]
 
 class QuadratureSet:
     """
-    Contains a :code:`list` of angles and a :code:`list` of weights, where the angles
-    are stored as :code:`mfem.Vector`s.
+    :ivar dim: Spatial dimension of all angles, determines quadrature normalization
+    :vartype dim: int
+    :ivar angles: Quadrature points; 1/2/3D vectors
+    :vartype angles: list[mfem.Vector]
+    :ivar weights: Quadrature weights, normalized according to dimension.
+    :vartype weights: list[float]
+    :ivar name: Name of quadrature set (used for printing output)
+    :vartype name: str
 
-    The angles and weights can be accessed using :code:`quad.angles` and 
-    :code:`quad.weights`. :code:`quad.dim` is the dimension (1,2,3) of each angle.
+    1D quadrature weights are normalized to 2, and 2/3D weights are normalized to
+    :math:`4\pi`.
 
-    1D quadrature weights are normalized to 2, and 2/3D weights are normalized to 
-    :math:`2\pi`.
+    .. code-block:: python
+
+        import numpy as np
+        from mfem.quadrature import QuadratureSet
+
+        quad1d = QuadratureSet([-0.57, 0.57], [1.0, 1.0], "S2")
+        quad2d = QuadratureSet(
+            [mfem.Vector([1.0, 0.0]), mfem.Vector([0.0, 1.0])],
+            [2*np.pi, 2*np.pi],
+            "bad_2d_quadrature"
+        )
+
+        mu0 = quad1d.angles[0] # returns mfem.Vector([-0.57])
+
     """
+
     def __init__(
         self,
         angles: list[VectorLike] | list[float],
@@ -107,7 +126,7 @@ def double_gauss(N: int) -> QuadratureSet:
 
 def gauss_lobatto(N: int) -> QuadratureSet:
     """
-    Generate Gauss-Lobtatto quadrature for 1D geometry. The set has N angle cosines, 
+    Generate Gauss-Lobtatto quadrature for 1D geometry. The set has N angle cosines,
     which always include -1 and 1.
     """
     if N < 2:
@@ -130,7 +149,7 @@ def gauss_lobatto(N: int) -> QuadratureSet:
 
 
 def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
-    """Level-symmetric (LQn) quadrature normalized to 4*pi (Ref. Lewis and 
+    """Level-symmetric (LQn) quadrature normalized to 4*pi (Ref. Lewis and
     Miller, Computational Method of Neutron Transport)"""
     if dim not in (2, 3):
         raise ValueError(f"'dim' must be 2 or 3 (got {dim})")

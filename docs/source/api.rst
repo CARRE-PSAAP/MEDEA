@@ -12,9 +12,6 @@ Python API
 .. autoclass:: medea.materials.MaterialGroup
    :members:
 
-.. autoclass:: medea.sweep.TransportSweep
-   :members:
-
 .. autoclass:: medea.quadrature.QuadratureSet
    :members:
 
@@ -25,3 +22,6 @@ Python API
 .. autofunction:: medea.quadrature.gauss_lobatto
 
 .. autofunction:: medea.quadrature.level_symmetric
+
+.. autoclass:: medea.sweep.TransportSweep
+   :members:
