@@ -13,7 +13,7 @@ Materials (mesh attribute / physical group id):
     2 aluminum (6061 walls, 2 mm; solid 8 mm corner rails)
     3 silicon  (500 um die = SENSITIVE VOLUME)
     4 FR-4     (1.6 mm printed circuit boards)
-    5 tantalum (1 mm spot-shield plate over one die)
+    5 tantalum (1 mm spot-shield can over one die)
     6 battery  (homogenized Li-ion pack)
     7 steel    (reaction-wheel flywheel, modeled as a solid puck)
 
@@ -28,8 +28,8 @@ Usage:
     python cubesat.py [--dim 1|2|3] [--mesh tet|hex] [--out FILE] [--scale S] [--gui]
 
 All lengths are in cm.  Simplifications: dies sit directly on the boards (no
-package or bond wires), the Ta shield is a plate (its supports are out of
-plane), rails are solid, the wheel is a solid block.
+package or bond wires), the Ta shield can is a lid plus four plain walls
+(no flange, no solder joint to the board), rails are solid, the wheel is a solid block.
 """
 
 import argparse
@@ -62,7 +62,8 @@ DIES = {
     "sensor": (4.0, 5.0, 4.5, 5.5, 1, "top"),
     "adc": (6.0, 7.0, 4.5, 5.5, 1, "bottom"),  # hangs below the upper board
 }
-CAP_DIE, CAP_GAP, CAP_T, CAP_OVER = "memory", 0.10, 0.10, 0.20  # Ta plate
+CAP_DIE, CAP_GAP, CAP_T, CAP_OVER = "memory", 0.10, 0.10, 0.20  # Ta plate (lid)
+CAP_WALL = 0.10  # Ta can side-wall thickness (< CAP_OVER)
 BATTERY_BOX = (1.5, 8.5, 1.5, 8.5, 1.8)  # x0, x1, z0, z1, thickness; on bottom wall
 WHEEL_BOX = (6.0, 9.0, 3.5, 6.5, 0.8)  # x0, x1, z0, z1, height; on upper board
 
@@ -153,7 +154,13 @@ def build_boxes():
     _, (x0, y0, z0), (x1, y1, z1) = sv[CAP_DIE]
     o, g = CAP_OVER, CAP_GAP
     add(TANTALUM, x0 - o, y1 + g, z0 - o, x1 + o, y1 + g + CAP_T, z1 + o)
-
+    # side walls of the can: board to plate, along the plate's outer edge,
+    # leaving a vacuum gap CAP_OVER - CAP_WALL between wall and die
+    w, yt = CAP_WALL, y1 + g
+    add(TANTALUM, x0 - o, y0, z0 - o, x0 - o + w, yt, z1 + o)  # -x wall
+    add(TANTALUM, x1 + o - w, y0, z0 - o, x1 + o, yt, z1 + o)  # +x wall
+    add(TANTALUM, x0 - o + w, y0, z0 - o, x1 + o - w, yt, z0 - o + w)  # -z wall
+    add(TANTALUM, x0 - o + w, y0, z1 + o - w, x1 + o - w, yt, z1 + o)  # +z wall
     x0, x1, z0, z1, t = BATTERY_BOX
     add(BATTERY, x0, T, z0, x1, T + t, z1)
     x0, x1, z0, z1, h = WHEEL_BOX
@@ -492,7 +499,7 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--dim", type=int, choices=[1, 2, 3], default=2)
-    p.add_argument("--mesh", choices=["tet", "hex"], default="tet")
+    p.add_argument("--mesh", choices=["tet", "hex"], default="hex")
     p.add_argument(
         "--out",
         help="output file (default examples/data/cubesat_<dim>d[_hex].msh/.mesh)",
