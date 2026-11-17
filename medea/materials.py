@@ -9,14 +9,13 @@ from medea._backend import mfem
 class Material:
     """A single material: a name and a set of named properties.
 
-    Args:
-        name: Non-empty string identifying the material.
-        data: ``{property: array_like}``, e.g. ``{"xs_total": [1.0, 2.0]}``. Values
-            are converted to float64 (a scalar has shape ``()``) and copied, so the
-            caller's arrays are untouched. Stored arrays are read-only.
+    :param name: Non-empty string identifying the material.
 
-    Index with a property name to get that property's array. Materials are
-    immutable; use :meth:`replace` to derive a variant.
+    :param data: ``{property: array_like}``, e.g. ``{"xs_total": [1.0, 2.0]}``.
+
+    All ``data`` values are converted to ``np.ndarray[np.float64]`` (including
+    scalars) so that they have a ``shape``. This allows multiple materials to
+    be checked against each other, ensuring all data members have the same shape.
     """
 
     __slots__ = ("_name", "_data")
@@ -39,11 +38,11 @@ class Material:
 
     @property
     def shapes(self):
-        """``{property: shape}`` for this material."""
+        """:return: ``{property: shape}`` for this material, e.g. ``{"xs_total": (2)}``"""
         return {p: a.shape for p, a in self._data.items()}
 
     def replace(self, **properties):
-        """Return a new ``Material`` (same name) with some properties changed or added."""
+        # Return a new ``Material`` (same name) with some properties changed or added.
         return Material(self._name, {**self._data, **properties})
 
     def __getitem__(self, prop):
@@ -160,17 +159,38 @@ class MaterialProperty:
 class MaterialGroup:
     """A set of :class:`Material` objects assigned to mesh attributes.
 
-    Args:
-        *materials: The materials. Names must be unique, and all materials must
-            have the same properties, each with the same shape in every material.
-        attributes: ``{mesh_attribute: material}`` where each material is a
-            ``Material`` from this group or its name. Keys must be positive
-            integers (gaps allowed; unmapped attributes evaluate to 0). A material
-            may appear on several attributes; one on none triggers a warning.
-            Defaults to ``{1: first_material, 2: second_material, ...}``.
+    :param \*materials: :class:``Material`` objects; Names must be unique, and all materials must
+        have the same properties (cross sections) and shape.
+    :param attributes: ``{mesh_attribute: material}`` where each material is a
+        ``Material`` from this group or its name. Keys are positive
+        integers. A material may be mapped to several attributes, and materials may be
+        skipped (will trigger a warning).W Defaults to
+        ``{1: first_material, 2: second_material, ...}``.
 
-    Index with a property name to get a :class:`MaterialProperty`. Use
-    :meth:`from_dict` to build from plain dictionaries.
+    Index by reaction and use :func:`to_PWConst()` to convert to MFEM coefficients.
+
+    .. code-block:: python
+
+        from medea.materials import MaterialGroup
+
+        mats = MaterialGroup(
+            Material("Al", {"xs_total": [1.0, 2.0], "xs_scatter": [0.5, 1.0]}),
+            Material("SiO2", {"xs_total": [1.5, 3.0], "xs_scatter": [0.9, 1.9]}),
+            attributes = {1: "Al", 2: "SiO2"}
+        )
+
+        mats["xs_total"]    # {"Al": np.ndarray([1.0, 2.0]),
+                            #  "SiO2": np.ndarray([1.5, 3.0])}
+
+        mats["xs_total"][0] #  {"Al": np.ndarray([1.0]),
+                            #   "SiO2": np.ndarray([1.5])}
+
+        mats["xs_total"][0].to_PWConst() # mfem.PWConstCoeff(mfem.Vector(1.0, 1.5))
+
+        mats = mats.remap({1: "SiO2", 2: "Al"}) # switches mapping of the two materials
+
+    Use :meth:`.check_mesh` and :meth:`.require` to validate a material group for use
+    in a method.
     """
 
     def __init__(self, *materials, attributes=None):
@@ -178,7 +198,7 @@ class MaterialGroup:
 
     @classmethod
     def from_dict(cls, materials, attributes=None):
-        """Build from ``{material_name: {property: array_like}}``.
+        """Build from a Python dictionary, ``{material_name: {property: array_like}}``.
 
         ``attributes`` follows the constructor's rules.
         """
@@ -324,7 +344,11 @@ class MaterialGroup:
 
     @property
     def properties(self):
-        """Property names shared by every material."""
+        """
+        Property names shared by every material.
+
+        :return: ``tuple[str]``
+        """
         return tuple(self._data)
 
     @property
@@ -342,7 +366,8 @@ class MaterialGroup:
             ) from None
 
     def require(self, *properties):
-        """Raise ``ValueError`` unless every named property is present."""
+        """Raise ``ValueError`` unless every named property is present. Use this in
+        a method (e.g. ``require("xs_total", "xs_scattering")``)"""
         missing = [p for p in properties if p not in self._data]
         if missing:
             raise ValueError(
@@ -351,21 +376,17 @@ class MaterialGroup:
             )
 
     def remap(self, attributes):
-        """Return a new ``MaterialGroup`` with a different attribute map.
+        """Return a new :class:`MaterialGroup` with a different attribute map.
 
         ``attributes`` follows the constructor's rules. Data arrays are shared,
-        not copied, and this object is unchanged. Coefficients are rebuilt for the
-        new map.
+        not copied, and this object is unchanged.
         """
         new = copy.copy(self)
         new._set_attributes(attributes)
         return new
 
     def check_mesh(self, mesh):
-        """Raise ``ValueError`` if ``mesh`` has attributes with no material.
-
-        Mapped attributes that the mesh does not use are fine.
-        """
+        """Raise ``ValueError`` if ``mesh`` has attributes with no assigned material."""
         missing = set(mesh.attributes.ToList()) - set(self._attributes)
         if missing:
             raise ValueError(
