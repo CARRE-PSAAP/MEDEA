@@ -23,23 +23,21 @@ import numpy as np
 
 import medea
 from medea import mfem
-from medea.materials import MaterialData
+from medea.materials import Material, MaterialGroup
 from medea.quadrature import level_symmetric
 
 DATA = Path(__file__).resolve().parent / "data"
 
 # Cross sections [1/cm]. Attributes default to 1, 2, ... in this order, matching the
 # material ids that cubesat.py writes to the mesh.
-MATERIALS = MaterialData(
-    {
-        "vacuum": {"xs_total": 0.0, "xs_scatter": 0.0},
-        "aluminum": {"xs_total": 1.0, "xs_scatter": 0.9},
-        "silicon": {"xs_total": 11.0, "xs_scatter": 10.0},
-        "fr4": {"xs_total": 11.0, "xs_scatter": 10.0},
-        "tantalum": {"xs_total": 11.0, "xs_scatter": 10.0},
-        "battery": {"xs_total": 11.0, "xs_scatter": 10.0},
-        "steel": {"xs_total": 11.0, "xs_scatter": 10.0},
-    }
+MATERIALS = MaterialGroup(
+    Material("vacuum", {"xs_total": 0.0, "xs_scatter": 0.0}),
+    Material("aluminum", {"xs_total": 1.0, "xs_scatter": 0.9}),
+    Material("silicon", {"xs_total": 11.0, "xs_scatter": 10.0}),
+    Material("fr4", {"xs_total": 11.0, "xs_scatter": 10.0}),
+    Material("tantalum", {"xs_total": 11.0, "xs_scatter": 10.0}),
+    Material("battery", {"xs_total": 11.0, "xs_scatter": 10.0}),
+    Material("steel", {"xs_total": 11.0, "xs_scatter": 10.0}),
 )
 
 INCIDENT_FLUX = 100.0  # psi(x, \Omega) for \Omega_x > 0
