@@ -62,7 +62,7 @@ def main():
 
     mesh = mfem.Mesh(str(DATA / mesh_file))
     MATERIALS.check_mesh(mesh)  # every mesh attribute must have a material
-    
+
     angles, weights = s6_quadrature()
 
     fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
