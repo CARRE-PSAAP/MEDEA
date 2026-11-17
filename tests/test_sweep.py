@@ -11,12 +11,6 @@ import scipy.sparse.linalg as spla
 import medea
 from medea._backend import mfem
 
-ANGLES = [
-    [0.25, 0.866025404],  # generic direction
-    [-0.866025404, 0.25],  # opposite x half-plane
-    [1.0, 0.0],  # axis-aligned: some faces are parallel to the sweep
-]
-
 
 def _build_forms(fespace, velocity):
     sigma = mfem.ConstantCoefficient(0.5)
@@ -87,7 +81,11 @@ CASES = {
     ),
     "2d": (
         lambda: mfem.Mesh(4, 4, "TRIANGLE"),
-        ANGLES,
+        [
+            [0.25, 0.866025404],  # generic direction
+            [-0.866025404, 0.25],  # opposite x half-plane
+            [1.0, 0.0],  # axis-aligned: some faces are parallel to the sweep
+        ],
     ),
     "3d": (
         lambda: mfem.Mesh(3, 3, 3, "TETRAHEDRON"),

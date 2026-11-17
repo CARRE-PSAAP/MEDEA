@@ -228,6 +228,11 @@ class TransportSweep:
 
         # end data preparation
 
+        # The kernel reads neighbouring dofs that have not been solved yet (faces
+        # parallel to the sweep carry no dependency but still have tiny nonzero
+        # matrix entries), so the output must not contain uninitialized memory.
+        solution.Assign(0.0)
+
         k_sweep(
             order,
             I,
