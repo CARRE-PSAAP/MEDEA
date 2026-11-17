@@ -22,14 +22,25 @@ from pathlib import Path
 import numpy as np
 
 import medea
-from medea._backend import mfem
+from medea import mfem
+from medea.materials import MaterialData
+from medea.quadrature import level_symmetric
 
 DATA = Path(__file__).resolve().parent / "data"
 
-# Cross sections [1/cm], indexed by material id - 1 (the mesh attribute set by cubesat.py)
-#            vacuum  aluminum  silicon  fr4   tantalum  battery  steel
-SIGMA_T = [0.0, 1.0, 11.0, 11.0, 11.0, 11.0, 11.0]  # total
-SIGMA_S = [0.0, 0.9, 10.0, 10.0, 10.0, 10.0, 10.0]  # isotropic scattering
+# Cross sections [1/cm]. Attributes default to 1, 2, ... in this order, matching the
+# material ids that cubesat.py writes to the mesh.
+MATERIALS = MaterialData(
+    {
+        "vacuum": {"xs_total": 0.0, "xs_scatter": 0.0},
+        "aluminum": {"xs_total": 1.0, "xs_scatter": 0.9},
+        "silicon": {"xs_total": 11.0, "xs_scatter": 10.0},
+        "fr4": {"xs_total": 11.0, "xs_scatter": 10.0},
+        "tantalum": {"xs_total": 11.0, "xs_scatter": 10.0},
+        "battery": {"xs_total": 11.0, "xs_scatter": 10.0},
+        "steel": {"xs_total": 11.0, "xs_scatter": 10.0},
+    }
+)
 
 INCIDENT_FLUX = 100.0  # psi(x, \Omega) for \Omega_x > 0
 TOLERANCE = 1e-4  # scalar flux relative convergence tolerance
@@ -54,14 +65,17 @@ def main():
     start = time.perf_counter()
 
     mesh = mfem.Mesh(str(DATA / mesh_file))
+    MATERIALS.check_mesh(mesh)  # every mesh attribute must have a material
+    
     angles, weights = s6_quadrature()
+
     fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
 
     # Set up constant values: LHS, isotropic scattering operator, BC
-    transport = streaming_collision_operators(space, angles)  # Omega.nabla + sigma_t
+    transport = streaming_collision_operators(space, angles, MATERIALS)  # Omega.nabla + sigma_t
     incident = incident_flux_sources(space, angles)  # boundary inflow, per direction
-    scattering = scattering_operator(space)  # phi -> sigma_s * phi
+    scattering = scattering_operator(space, MATERIALS)  # phi -> sigma_s * phi
 
     ####### Create sweep cell ordering #######
     sweeper = medea.sweep.TransportSweep(
@@ -124,7 +138,7 @@ def streaming_collision_operators(space, angles):
     Streaming inside a cell, upwind coupling across cell faces (and outflow through
     the boundary), plus collisions: sigma_t times the cell mass matrix.
     """
-    sigma_t = mfem.PWConstCoefficient(mfem.Vector(SIGMA_T))
+    sigma_t = MATERIALS["xs_total"].to_PWConst()
     operators = []
     for omega in angles:
         L = mfem.BilinearForm(space)
@@ -167,10 +181,12 @@ def incident_flux_sources(space, angles):
     return sources
 
 
-def scattering_operator(space):
+def scattering_operator(space, materials):
     """Matrix that turns the scalar flux into the isotropic scattering source,
-    q = sigma_s * phi, weighted by the finite-element basis."""
-    sigma_s = mfem.PWConstCoefficient(mfem.Vector(SIGMA_S))
+    q = sigma_s * phi / 4pi, weighted by the finite-element basis."""
+    sigma_s = mfem.ProductCoefficient(
+        1 / (4 * np.pi), materials["xs_scatter"].to_PWConst()
+    )
     S = mfem.BilinearForm(space)
     S.AddDomainIntegrator(mfem.MassIntegrator(sigma_s))
     S.Assemble()
