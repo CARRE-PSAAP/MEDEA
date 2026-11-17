@@ -21,9 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-import medea
-from medea import mfem
-from medea.materials import Material, MaterialGroup
+from medea import Material, MaterialGroup, TransportSweep, mfem
 from medea.quadrature import level_symmetric
 
 DATA = Path(__file__).resolve().parent / "data"
@@ -78,9 +76,7 @@ def main():
     scattering = scattering_operator(space, MATERIALS)  # phi -> sigma_s * phi
 
     ####### Create sweep cell ordering #######
-    sweeper = medea.sweep.TransportSweep(
-        mesh, space, angles
-    )  # cell order per direction
+    sweeper = TransportSweep(mesh, space, angles)  # cell order per direction
     ##########################################
 
     phi = np.zeros(space.GetNDofs())  # scalar flux
