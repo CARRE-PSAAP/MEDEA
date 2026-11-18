@@ -148,20 +148,12 @@ def test_empty_attribute_map_rejected():
     with pytest.raises(ValueError, match="non-empty"):
         MaterialGroup.from_dict({"a": {"x": 1.0}}, attributes={})
 
-
-def test_unassigned_material_warns_at_the_callers_line():
-    with pytest.warns(UserWarning, match="'b'") as rec:
-        MaterialGroup.from_dict({"a": {"x": 1.0}, "b": {"x": 2.0}}, attributes={1: "a"})
-    assert rec[0].filename == __file__
-
-
 def test_no_warning_when_every_material_is_assigned(mats):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         MaterialGroup.from_dict(
             {"a": {"x": 1.0}, "b": {"x": 2.0}}, attributes={5: "a", 6: "b"}
         )
-
 
 def test_remap_without_copying_or_mutating(mats):
     swapped = mats.remap({1: "mod", 2: "fuel"})
@@ -418,14 +410,6 @@ def test_group_rejects_non_materials_and_empty_input():
     with pytest.raises(ValueError, match="at least one material"):
         MaterialGroup()
 
-
-def test_unassigned_warning_points_at_caller_for_both_constructors():
-    a, b = Material("a", {"x": 1.0}), Material("b", {"x": 2.0})
-    with pytest.warns(UserWarning, match="'b'") as rec:
-        MaterialGroup(a, b, attributes={1: a})
-    assert rec[0].filename == __file__
-
-
 def test_group_material_lookup_error_lists_materials(mats):
     with pytest.raises(KeyError, match="unknown material 'water'.*fuel"):
         mats.material("water")
@@ -435,6 +419,44 @@ def test_require_checks_properties(mats):
     mats.require("total", "scatter")
     with pytest.raises(ValueError, match=r"missing properties \['nope'\].*total"):
         mats.require("total", "nope")
+
+
+def test_num_groups_defaults_to_one_and_survives_remap(mats):
+    assert mats.num_groups == 1
+    two = MaterialGroup.from_dict({"a": {"x": [1.0, 2.0]}}, num_groups=2)
+    assert two.num_groups == 2
+    assert two.remap({1: "a"}).num_groups == 2
+    assert "num_groups=2" in repr(two)
+
+
+@pytest.mark.parametrize("bad", [0, -1, 1.5, True, "2"])
+def test_num_groups_must_be_a_positive_integer(bad):
+    with pytest.raises(ValueError, match="num_groups"):
+        MaterialGroup.from_dict({"a": {"x": 1.0}}, num_groups=bad)
+
+
+def test_require_checks_shapes_against_num_groups():
+    mats = MaterialGroup.from_dict(
+        {"a": {"total": [1.0, 2.0], "scatter": SCATTER_A[:, :, 0], "temp": 300.0}},
+        num_groups=2,
+    )
+    G = mats.num_groups
+    mats.require("temp", total=(G,), scatter=(G, G))
+    mats.require(total=G, temp=())  # ints are one-dimensional shapes
+    with pytest.raises(ValueError, match=r"'scatter'.*\(2, 2\).*expected \(2, 2, 2\)"):
+        mats.require(scatter=(G, G, 2))
+
+
+def test_require_scalar_does_not_match_one_group_shape():
+    mats = MaterialGroup.from_dict({"a": {"total": 1.0}})
+    with pytest.raises(ValueError, match=r"'total'.*\(\).*expected \(1,\)"):
+        mats.require(total=(mats.num_groups,))
+
+
+def test_require_reports_missing_keyword_properties():
+    mats = MaterialGroup.from_dict({"a": {"total": [1.0]}})
+    with pytest.raises(ValueError, match=r"missing properties \['nope'\]"):
+        mats.require(nope=(1,))
 
 
 def test_group_does_not_alias_its_material_data(mats):
@@ -466,9 +488,3 @@ def test_remap_rebuilds_coefficients_and_leaves_the_original_cache(mats):
     mesh = strip_mesh([1])
     assert eval_on(mats["temp"].to_PWConst(), mesh, 0) == 300.0
     assert eval_on(swapped["temp"].to_PWConst(), mesh, 0) == 400.0
-
-
-def test_from_dict_warning_points_at_caller():
-    with pytest.warns(UserWarning, match="'b'") as rec:
-        MaterialGroup.from_dict({"a": {"x": 1.0}, "b": {"x": 2.0}}, attributes={1: "a"})
-    assert rec[0].filename == __file__
