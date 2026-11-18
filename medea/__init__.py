@@ -17,5 +17,6 @@ except ImportError as err:  # compiled module missing
 from ._backend import mfem
 from .materials import Material, MaterialGroup
 from .sweep import TransportSweep
+from .boundary_conditions import BoundaryCondition
 
-__all__ = ["MFEM_MODE", "Material", "MaterialGroup", "TransportSweep", "mfem"]
+__all__ = ["MFEM_MODE", "Material", "MaterialGroup", "TransportSweep", "mfem", "BoundaryCondition"]

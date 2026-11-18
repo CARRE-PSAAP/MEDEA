@@ -93,6 +93,7 @@ class QuadratureSet:
                 raise ValueError(f"Invalid angle dimension {self.dim}")
 
         self.name = name
+        self.M = len(self.angles)
 
 
 def gauss_legendre(N: int) -> QuadratureSet:
