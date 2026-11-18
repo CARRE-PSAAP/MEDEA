@@ -22,7 +22,6 @@ from pathlib import Path
 import numpy as np
 
 from medea import Material, MaterialGroup, TransportSweep, mfem
-from medea.quadrature import level_symmetric
 
 DATA = Path(__file__).resolve().parent / "data"
 
@@ -128,13 +127,13 @@ def s6_quadrature():
     return angles, np.array(weights) / sum(weights)
 
 
-def streaming_collision_operators(space, angles):
+def streaming_collision_operators(space, angles, materials):
     """For each direction, the matrix of  Omega . grad + sigma_t  (upwind, per cell).
 
     Streaming inside a cell, upwind coupling across cell faces (and outflow through
     the boundary), plus collisions: sigma_t times the cell mass matrix.
     """
-    sigma_t = MATERIALS["xs_total"].to_PWConst()
+    sigma_t = materials["xs_total"].to_PWConst()
     operators = []
     for omega in angles:
         L = mfem.BilinearForm(space)
