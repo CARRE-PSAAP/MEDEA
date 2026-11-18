@@ -21,9 +21,8 @@ from pathlib import Path
 
 import numpy as np
 
-from medea import Material, MaterialGroup, TransportSweep, mfem
 import medea
-from medea import mfem
+from medea import BoundaryCondition, Material, MaterialGroup, TransportSweep, mfem
 from medea.quadrature import level_symmetric
 
 DATA = Path(__file__).resolve().parent / "data"
@@ -69,6 +68,9 @@ def main():
     quad = level_symmetric(6, dim=2)
     angles = quad.angles
     weights = quad.weights
+
+    n_bdr_attributes = mesh.bdr_attributes.Size()
+    bc = BoundaryCondition(INCIDENT_FLUX*np.ones((n_bdr_attributes, quad.M)))
 
     fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
