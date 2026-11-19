@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Added
 
+- Add Black linting workflow, from [@hansenkyle]
 - Add Sphinx documentation, from [@hansenkyle]
 - Add C++ and MFEM scaffolding, from [@hansenkyle]
 - Add CONTRIBUTING and CHANGELOG, from [@hansenkyle]
