@@ -1,5 +1,5 @@
-MEDEA Theory Guide
-==================
+Theory Guide
+============
 
 Boltzmann Transport Equation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -7,9 +7,10 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "MEDEA"
-copyright = "2026 CARRE"
+copyright = "2026 Center for Advancing the Radiation Resilience of Electronics (CARRE)"
 author = "Kyle Hansen, India Allan, Caleb Shaw"
 release = "0.0.0"
+version = "0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -34,7 +35,7 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 
 # -- MathJax formatting configuration -------------------------------------------------
