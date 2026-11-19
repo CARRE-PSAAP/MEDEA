@@ -6,11 +6,34 @@ from .quadrature import QuadratureSet
 
 
 class BoundaryCondition:
-    # Boundary condition PWConstCoefficient for each quadrature point
-    # stored similarly to Material
+    """
+    This class stores incoming flux boundary conditions, indexed by quadrature angle
+    number and :class:`mfem.Mesh` boundary attribute number. Since the boundary
+    condition is strongly coupled to mesh and quadrature, it must be validated before
+    being converted to an MFEM coefficient.
 
-    # BC.validate(mesh, quadrature)-- check attribute count, angle count (must match exactly)
-    # List in order of [attribute][direction]. 2d np.ndarray
+    Usage:
+
+    .. code-block:: python
+
+        import numpy as np
+        from medea import BoundaryCondition
+        from medea.mfem import Mesh
+
+        ...
+        # build mesh with 3 boundary attribute types
+        # build quadrature set with 16 angles
+        ...
+
+        # isotropic incoming flux, psi=1.0
+        bc = BoundaryCondition(np.ones((3, 16)))
+
+        # validate with mesh and quadrature
+        bc.validate(mesh, quad)
+
+        # get MFEM coefficients
+        incoming_mu_0 = bc[0] # returns mfem.PWConstCoefficient
+    """
     def __init__(self, values: np.ndarray, attributes: list[int] | None = None):
         values = np.asarray(values, dtype=float)
         if values.ndim != 2:
@@ -48,7 +71,7 @@ class BoundaryCondition:
             self._coefficients.append(mfem.PWConstCoefficient(mfem.Vector(vec)))
 
     def __getitem__(self, index):
+        # index by quadrature angle
         if self._coefficients is None:
             raise RuntimeError("BoundaryCondition must be validated before indexing")
-        # Handles integers (obj[0]) and slices (obj[1:3]) automatically
         return self._coefficients[index]
