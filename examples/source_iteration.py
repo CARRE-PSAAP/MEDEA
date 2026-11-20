@@ -28,13 +28,13 @@ DATA = Path(__file__).resolve().parent / "data"
 # Cross sections [1/cm]. Attributes default to 1, 2, ... in this order, matching the
 # material ids that cubesat.py writes to the mesh.
 MATERIALS = MaterialGroup(
-    Material("vacuum", {"xs_total": 0.0, "xs_scatter": 0.0}),
-    Material("aluminum", {"xs_total": 1.0, "xs_scatter": 0.9}),
-    Material("silicon", {"xs_total": 11.0, "xs_scatter": 10.0}),
-    Material("fr4", {"xs_total": 11.0, "xs_scatter": 10.0}),
-    Material("tantalum", {"xs_total": 11.0, "xs_scatter": 10.0}),
-    Material("battery", {"xs_total": 11.0, "xs_scatter": 10.0}),
-    Material("steel", {"xs_total": 11.0, "xs_scatter": 10.0}),
+    Material("vacuum", xs_total = 0.0, xs_scatter = 0.0),
+    Material("aluminum", xs_total = 1.0, xs_scatter = 0.9),
+    Material("silicon", xs_total = 11.0, xs_scatter = 10.0),
+    Material("fr4", xs_total = 11.0, xs_scatter = 10.0),
+    Material("tantalum", xs_total = 11.0, xs_scatter = 10.0),
+    Material("battery", xs_total = 11.0, xs_scatter = 10.0),
+    Material("steel", xs_total =11.0,  xs_scatter = 10.0),
 )
 
 INCIDENT_FLUX = 100.0  # psi(x, \Omega) for \Omega_x > 0
@@ -133,7 +133,7 @@ def streaming_collision_operators(space, angles, materials):
     Streaming inside a cell, upwind coupling across cell faces (and outflow through
     the boundary), plus collisions: sigma_t times the cell mass matrix.
     """
-    sigma_t = materials["xs_total"].to_PWConst()
+    sigma_t = materials.xs_total[0].to_PWConst()
     operators = []
     for omega in angles:
         L = mfem.BilinearForm(space)
@@ -180,7 +180,7 @@ def scattering_operator(space, materials):
     """Matrix that turns the scalar flux into the isotropic scattering source,
     q = sigma_s * phi / 4pi, weighted by the finite-element basis."""
     sigma_s = mfem.ProductCoefficient(
-        1 / (4 * np.pi), materials["xs_scatter"].to_PWConst()
+        1 / (4 * np.pi), materials.xs_scatter[0,0].to_PWConst()
     )
     S = mfem.BilinearForm(space)
     S.AddDomainIntegrator(mfem.MassIntegrator(sigma_s))

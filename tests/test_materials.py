@@ -88,6 +88,12 @@ def test_accepts_lists_scalars_and_arrays_of_any_shape(mats):
     assert mats["xs_total"].array.dtype == np.float64
 
 
+def test_scalar_xs_converted_to_one_group_arrays():
+    m = Material("a", 1.0, 0.5)
+    assert m.xs_total.shape == (1,)
+    assert m.xs_scatter.shape == (1, 1)
+
+
 def test_integer_input_becomes_float():
     m = MaterialGroup.from_dict({"a": core(2, x=[1, 2])}, n_groups=2)
     assert m["x"].array.dtype == np.float64
@@ -404,7 +410,6 @@ def test_required_properties_cannot_be_omitted():
 @pytest.mark.parametrize(
     "xs_total, xs_scatter, prop",
     [
-        (1.0, [[1.0]], "xs_total"),  # scalar is not (1,)
         ([1.0, 2.0], [[1.0]], "xs_total"),
         ([1.0], [1.0], "xs_scatter"),
         ([1.0], [[1.0, 2.0]], "xs_scatter"),

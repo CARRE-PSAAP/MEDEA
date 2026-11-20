@@ -11,9 +11,11 @@ class Material:
 
     :param name: Non-empty string identifying the material.
 
-    :param xs_total: Total cross section, shape ``(n_groups,)``.
+    :param xs_total: Total cross section, shape ``(n_groups,)``. A scalar
+        is converted to shape ``(1,)``.
 
     :param xs_scatter: Scattering cross section, shape ``(n_groups, n_groups)``.
+        A scalar is converted to shape ``(1, 1)``.
 
     :param n_groups: Number of energy groups (default 1). ``xs_total`` and
         ``xs_scatter`` are checked against it.
@@ -53,6 +55,10 @@ class Material:
             **optional,
         }.items():
             arr = np.array(value, dtype=np.float64)  # copies
+            if arr.ndim == 0 and prop == "xs_total":
+                arr = arr.reshape(1)  # scalar -> (1,)
+            elif arr.ndim == 0 and prop == "xs_scatter":
+                arr = arr.reshape(1, 1)  # scalar -> (1, 1)
             arr.flags.writeable = False
             self._data[prop] = arr
 
