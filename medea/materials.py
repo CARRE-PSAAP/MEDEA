@@ -7,34 +7,81 @@ from medea._backend import mfem
 
 
 class Material:
-    """A single material: a name and a set of named properties.
+    """Data and name for one material.
 
     :param name: Non-empty string identifying the material.
 
-    :param data: ``{property: array_like}``, e.g. ``{"xs_total": [1.0, 2.0]}``.
+    :param xs_total: Total cross section, shape ``(n_groups,)``.
 
-    All ``data`` values are converted to ``np.ndarray[np.float64]`` (including
+    :param xs_scatter: Scattering cross section, shape ``(n_groups, n_groups)``.
+
+    :param n_groups: Number of energy groups (default 1). ``xs_total`` and
+        ``xs_scatter`` are checked against it.
+
+    :param optional: Any further properties as keyword arguments,
+        ``{property: array_like}``, e.g. ``stopping_power=[1.0, 2.0]``.
+
+    All data values are converted to ``np.ndarray[np.float64]`` (including
     scalars) so that they have a ``shape``. This allows multiple materials to
     be checked against each other, ensuring all data members have the same shape.
+
+    Every property is available by name, ``mat["xs_total"]``; total and scattering
+    cross sections are also available as attributes, ``mat.xs_total``.
+
+    Note: ``xs_scatter`` is the cross section only, i.e. the first Legendre moment
+    of the differential scattering cross section. Scattering angular distributions
+    are specified using optional parameters (to be added).
     """
 
-    __slots__ = ("_name", "_data")
+    __slots__ = ("_name", "_n_groups", "_data")
 
-    def __init__(self, name, data):
+    def __init__(self, name, xs_total, xs_scatter, n_groups: int = 1, **optional):
         if not isinstance(name, str) or not name:
             raise ValueError(f"material name must be a non-empty string; got {name!r}")
-        if not data:
-            raise ValueError(f"material {name!r} must have at least one property")
+        if (
+            isinstance(n_groups, bool)
+            or not isinstance(n_groups, (int, np.integer))
+            or n_groups < 1
+        ):
+            raise ValueError(f"n_groups must be a positive integer; got {n_groups!r}")
         self._name = name
+        self._n_groups = int(n_groups)
         self._data = {}
-        for prop, value in data.items():
+        for prop, value in {
+            "xs_total": xs_total,
+            "xs_scatter": xs_scatter,
+            **optional,
+        }.items():
             arr = np.array(value, dtype=np.float64)  # copies
             arr.flags.writeable = False
             self._data[prop] = arr
 
+        G = self._n_groups
+        for prop, expected in (("xs_total", (G,)), ("xs_scatter", (G, G))):
+            if self._data[prop].shape != expected:
+                raise ValueError(
+                    f"material {name!r}: {prop} has shape {self._data[prop].shape}, "
+                    f"expected {expected} (n_groups={G})"
+                )
+
     @property
     def name(self):
         return self._name
+
+    @property
+    def n_groups(self):
+        """Number of energy groups."""
+        return self._n_groups
+
+    @property
+    def xs_total(self):
+        """Total cross section, shape ``(n_groups,)``."""
+        return self._data["xs_total"]
+
+    @property
+    def xs_scatter(self):
+        """Scattering cross section, shape ``(n_groups, n_groups)``."""
+        return self._data["xs_scatter"]
 
     @property
     def shapes(self):
@@ -43,7 +90,9 @@ class Material:
 
     def replace(self, **properties):
         # Return a new ``Material`` (same name) with some properties changed or added.
-        return Material(self._name, {**self._data, **properties})
+        return Material(
+            self._name, n_groups=self._n_groups, **{**self._data, **properties}
+        )
 
     def __getitem__(self, prop):
         try:
@@ -157,31 +206,30 @@ class MaterialProperty:
 
 
 class MaterialGroup:
-    """A set of :class:`Material` objects assigned to mesh attributes.
+    r"""A set of :class:`Material` objects assigned to mesh attributes.
 
-    :param \*materials: :class:``Material`` objects; Names must be unique, and all materials must
-        have the same properties (cross sections) and shape.
+    :param \*materials: :class:`Material` objects; names must be unique, and all materials must
+        have the same properties, shapes and ``n_groups``.
     :param attributes: ``{mesh_attribute: material}`` where each material is a
         ``Material`` from this group or its name. Keys are positive
         integers. A material may be mapped to several attributes, and materials may be
         skipped (will trigger a warning). Defaults to
         ``{1: first_material, 2: second_material, ...}``.
-    :param num_groups: Number of energy groups (default 1). Not used by :class:`MaterialGroup`, 
-        this value is used by methods to validate their own data.
 
-    Index by reaction and use :func:`to_PWConst()` to convert to MFEM coefficients.
+    Index by property name (``mats["xs_total"]``, or ``mats.xs_total`` for the required
+    cross sections) and use :func:`to_PWConst()` to convert to MFEM coefficients.
 
     .. code-block:: python
 
         from medea.materials import MaterialGroup
 
         mats = MaterialGroup(
-            Material("Al", {"xs_total": [1.0, 2.0], "xs_scatter": [[0.5, 0.0], [0.1, 1.0]]}),
-            Material("SiO2", {"xs_total": [1.5, 3.0], "xs_scatter": [[0.9, 0.0], [0.2, 1.9]]}),
+            Material("Al", [2.0, 1.0], [[0.1, 1.0], [0.0, 0.5]], n_groups=2),
+            Material("SiO2", [3.0, 1.5], [[0.2, 1.9], [0.9, 0.0]], n_groups=2),
             attributes = {1: "Al", 2: "SiO2"},
-            num_groups = 2,
         )
 
+        mats.xs_total       # same as mats["xs_total"]
         mats["xs_total"]    # {"Al": np.ndarray([1.0, 2.0]),
                             #  "SiO2": np.ndarray([1.5, 3.0])}
 
@@ -196,37 +244,29 @@ class MaterialGroup:
     in a method.
     """
 
-    def __init__(self, *materials, attributes=None, num_groups=1):
-        self._build(materials, attributes, num_groups)
+    def __init__(self, *materials, attributes=None):
+        self._build(materials, attributes)
 
     @classmethod
-    def from_dict(cls, materials, attributes=None, num_groups=1):
+    def from_dict(cls, materials, attributes=None, n_groups=1):
         """Build from a Python dictionary, ``{material_name: {property: array_like}}``.
 
-        ``attributes`` and ``num_groups`` follow the constructor's rules.
+        Each inner dictionary must contain ``xs_total`` and ``xs_scatter``; all
+        materials get ``n_groups`` energy groups. ``attributes`` follows the
+        constructor's rules.
         """
         if not materials:
             raise ValueError("'materials' must be non-empty")
         self = object.__new__(cls)
         self._build(
-            [Material(n, d) for n, d in materials.items()],
+            [Material(n, n_groups=n_groups, **d) for n, d in materials.items()],
             attributes,
-            num_groups
         )
         return self
 
-    def _build(self, materials, attributes, num_groups):
+    def _build(self, materials, attributes):
         if not materials:
             raise ValueError("a MaterialGroup needs at least one material")
-        if (
-            isinstance(num_groups, bool)
-            or not isinstance(num_groups, (int, np.integer))
-            or num_groups < 1
-        ):
-            raise ValueError(
-                f"num_groups must be a positive integer; got {num_groups!r}"
-            )
-        self._num_groups = int(num_groups)
         for m in materials:
             if not isinstance(m, Material):
                 raise TypeError(
@@ -257,7 +297,13 @@ class MaterialGroup:
     def _check_consistency(self):
         first = self._materials[0]
         props = list(first)
+        self._n_groups = first.n_groups
         for m in self._materials:
+            if m.n_groups != first.n_groups:
+                raise ValueError(
+                    f"material {m.name!r} has n_groups={m.n_groups}, "
+                    f"but {first.name!r} has n_groups={first.n_groups}"
+                )
             if set(m) != set(props):
                 raise ValueError(
                     f"material {m.name!r} has properties {sorted(m)}, "
@@ -365,9 +411,19 @@ class MaterialGroup:
         return tuple(self._data)
 
     @property
-    def num_groups(self):
-        """Number of energy groups declared at construction (see the class docs)."""
-        return self._num_groups
+    def n_groups(self):
+        """Number of energy groups (shared by every material)."""
+        return self._n_groups
+
+    @property
+    def xs_total(self):
+        """:class:`MaterialProperty` for ``xs_total``; same as ``self["xs_total"]``."""
+        return self["xs_total"]
+
+    @property
+    def xs_scatter(self):
+        """:class:`MaterialProperty` for ``xs_scatter``; same as ``self["xs_scatter"]``."""
+        return self["xs_scatter"]
 
     @property
     def attributes(self):
@@ -388,15 +444,17 @@ class MaterialGroup:
 
         Positional arguments name properties that must exist. Keyword arguments name a
         property *and* the exact shape each material's data must have (an ``int`` or a
-        tuple), so a method states what it needs in terms of :attr:`num_groups`:
+        tuple), so a method states what it needs in terms of :attr:`n_groups`. The
+        required ``xs_total`` and ``xs_scatter`` are always present and already
+        checked, so this is for optional properties:
 
         .. code-block:: python
 
-            G = mats.num_groups
-            mats.require("temp", xs_total=(G,), xs_scatter=(G, G))
+            G = mats.n_groups
+            mats.require("temp", stopping_power=(G,))
 
         Shapes are exact. A scalar does not stand in for ``(1,)``, because indexing it
-        as ``mats["xs_total"][0]`` would fail; give one-group data as ``[1.0]``.
+        as ``mats["stopping_power"][0]`` would fail; give one-group data as ``[1.0]``.
         """
         names = list(properties) + [p for p in shapes if p not in properties]
         missing = [p for p in names if p not in self._data]
@@ -413,7 +471,7 @@ class MaterialGroup:
             if actual != expected:
                 raise ValueError(
                     f"property {prop!r} has shape {actual} for each material, "
-                    f"expected {expected} (num_groups={self._num_groups})"
+                    f"expected {expected} (n_groups={self._n_groups})"
                 )
 
     def remap(self, attributes):
@@ -438,5 +496,5 @@ class MaterialGroup:
     def __repr__(self):
         return (
             f"MaterialGroup(materials={list(self._names)}, "
-            f"properties={list(self._data)}, num_groups={self._num_groups})"
+            f"properties={list(self._data)}, n_groups={self._n_groups})"
         )
