@@ -74,37 +74,37 @@ class TestQuadratureSet1D:
 
 class TestQuadratureSet2D:
     def test_construction(self):
-        qs = QuadratureSet(unit_vectors_2d(8), [4 * np.pi / 8] * 8, "ring")
+        qs = QuadratureSet(unit_vectors_2d(8), [1. / 8] * 8, "ring")
         assert qs.dim == 2
         assert len(qs.angles) == 8
         assert all(v.Size() == 2 for v in qs.angles)
-        assert qs.weights.sum() == pytest.approx(4 * np.pi)
+        assert qs.weights.sum() == pytest.approx(1.)
 
     def test_mfem_vectors(self):
         angles = [mfem.Vector(a) for a in unit_vectors_2d(4)]
-        qs = QuadratureSet(angles, [np.pi] * 4)
+        qs = QuadratureSet(angles, [0.25] * 4)
         assert qs.dim == 2
         np.testing.assert_allclose(values(qs), unit_vectors_2d(4))
 
     def test_zero_first_moment(self):
-        qs = QuadratureSet(unit_vectors_2d(8), [4 * np.pi / 8] * 8)
+        qs = QuadratureSet(unit_vectors_2d(8), [1.0 / 8] * 8)
         np.testing.assert_allclose(qs.weights @ values(qs), 0.0, atol=1e-12)
 
 
 class TestQuadratureSet3D:
     def test_construction(self):
-        qs = QuadratureSet(unit_vectors_3d(), [4 * np.pi / 8] * 8)
+        qs = QuadratureSet(unit_vectors_3d(), [1. / 8] * 8)
         assert qs.dim == 3
         assert len(qs.angles) == 8
         assert all(v.Size() == 3 for v in qs.angles)
-        assert qs.weights.sum() == pytest.approx(4 * np.pi)
+        assert qs.weights.sum() == pytest.approx(1.)
 
     def test_second_moment_is_isotropic(self):
         # int Omega_i Omega_j dOmega = (4 pi / 3) delta_ij
-        qs = QuadratureSet(unit_vectors_3d(), [4 * np.pi / 8] * 8)
+        qs = QuadratureSet(unit_vectors_3d(), [1. / 8] * 8)
         a = values(qs)
         np.testing.assert_allclose(
-            a.T @ (qs.weights[:, None] * a), 4 * np.pi / 3 * np.eye(3), atol=1e-12
+            a.T @ (qs.weights[:, None] * a), 1. / 3 * np.eye(3), atol=1e-12
         )
 
 
@@ -115,11 +115,11 @@ class TestQuadratureSetValidation:
 
     def test_mixed_dimensions(self):
         with pytest.raises(ValueError, match="same dimension"):
-            QuadratureSet([[1.0, 0.0], [0.0, 0.0, 1.0]], [2 * np.pi, 2 * np.pi])
+            QuadratureSet([[1.0, 0.0], [0.0, 0.0, 1.0]], [0.5] * 2)
 
     def test_dim_too_large(self):
         with pytest.raises(ValueError, match="Invalid angle dimension"):
-            QuadratureSet([[1.0, 0, 0, 0], [-1.0, 0, 0, 0]], [2 * np.pi] * 2)
+            QuadratureSet([[1.0, 0, 0, 0], [-1.0, 0, 0, 0]], [0.5] * 2)
 
     @pytest.mark.parametrize("scale", [0.5, 2.0])
     def test_grossly_wrong_weights_raise(self, scale):
@@ -313,7 +313,7 @@ class TestLevelSymmetric:
         assert qs.name == f"S{N} level-symmetric"
         n_octant = N * (N + 2) // 8
         assert len(qs.angles) == len(qs.weights) == n_octant * 2**dim
-        assert qs.weights.sum() == pytest.approx(4 * np.pi)
+        assert qs.weights.sum() == pytest.approx(1)
         assert np.all(qs.weights > 0)
 
     @pytest.mark.parametrize("N", ORDERS)
@@ -338,10 +338,10 @@ class TestLevelSymmetric:
         qs = level_symmetric(N, 3)
         w, mu = qs.weights, values(qs)
         np.testing.assert_allclose(w @ mu, 0.0, atol=1e-12)  # flow condition
-        np.testing.assert_allclose(w @ mu**2, 4 * np.pi / 3)  # diffusion condition
+        np.testing.assert_allclose(w @ mu**2, 1 / 3)  # Eddington
         # Even moments up to order N-2 match the sphere integral of mu^2 eta^2 = 4pi/15
         if N >= 6:
-            assert w @ (mu[:, 0] ** 2 * mu[:, 1] ** 2) == pytest.approx(4 * np.pi / 15)
+            assert w @ (mu[:, 0] ** 2 * mu[:, 1] ** 2) == pytest.approx(1 / 15)
 
     @pytest.mark.parametrize("N", ORDERS)
     def test_reflection_symmetry(self, N):
@@ -382,7 +382,7 @@ class TestLevelSymmetric:
     def test_high_order_negative_weights_warn(self):
         with pytest.warns(UserWarning, match="negative weights"):
             qs = level_symmetric(20, 3)
-        assert qs.weights.sum() == pytest.approx(4 * np.pi)
+        assert qs.weights.sum() == pytest.approx(1.0)
         assert np.any(qs.weights < 0)
 
     @pytest.mark.parametrize("dim", [1, 4, 0])
