@@ -1,7 +1,6 @@
 """MEDEA: deterministic transport tools built on MFEM."""
 
 from ._backend import MFEM_MODE  # "ser" or "par": which PyMFEM module is in use
-from .sweep import TransportSweep
 
 try:
     from . import kernels
@@ -13,4 +12,8 @@ except ImportError as err:  # compiled module missing
         "the installed package: run from another directory."
     ) from err
 
-__all__ = ["MFEM_MODE"]
+from ._backend import mfem
+from .materials import Material, MaterialGroup
+from .sweep import TransportSweep
+
+__all__ = ["MFEM_MODE", "Material", "MaterialGroup", "TransportSweep", "mfem"]
