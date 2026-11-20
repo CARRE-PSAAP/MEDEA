@@ -20,8 +20,7 @@ class QuadratureSet:
     :ivar name: Name of quadrature set (used for printing output)
     :vartype name: str
 
-    1D quadrature weights are normalized to 2, and 2/3D weights are normalized to
-    :math:`4\\pi`.
+    1D quadrature weights are normalized to 2, and 2/3D weights are normalized to 1.
 
     .. code-block:: python
 
@@ -89,7 +88,7 @@ class QuadratureSet:
             case 1:
                 self.weights = _normalize(self.weights, 2.0, 8, 5)
             case 2 | 3:
-                self.weights = _normalize(self.weights, 4 * np.pi, 8, 5)
+                self.weights = _normalize(self.weights, 1.0, 8, 5)
             case _:
                 raise ValueError(f"Invalid angle dimension {self.dim}")
 
@@ -149,7 +148,7 @@ def gauss_lobatto(N: int) -> QuadratureSet:
 
 
 def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
-    """Level-symmetric (LQn) quadrature normalized to 4*pi (Ref. Lewis and
+    """Level-symmetric (LQn) quadrature normalized to 1 (Ref. Lewis and
     Miller, Computational Method of Neutron Transport)"""
     if dim not in (2, 3):
         raise ValueError(f"'dim' must be 2 or 3 (got {dim})")
@@ -213,5 +212,5 @@ def level_symmetric(N: int, dim: int = 3) -> QuadratureSet:
     signs = np.array(list(product((-1, 1), repeat=dim)))
     octant = mu[np.array([i, j, k]).T[:, :dim]]
     angles = (signs[:, None, :] * octant[None]).reshape(-1, dim)
-    weights = np.tile(4 * pi * P[cls] / len(signs), len(signs))
+    weights = np.tile(P[cls] / len(signs), len(signs))
     return QuadratureSet(list(angles), weights, f"S{N} level-symmetric")
