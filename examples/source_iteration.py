@@ -70,7 +70,8 @@ def main():
     weights = quad.weights
 
     n_bdr_attributes = mesh.bdr_attributes.Size()
-    bc = BoundaryCondition(INCIDENT_FLUX*np.ones((n_bdr_attributes, quad.M)))
+    bc = BoundaryCondition([INCIDENT_FLUX*np.ones((n_bdr_attributes, quad.M))])
+    bc.validate(mesh, quad)
 
     fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
@@ -79,7 +80,6 @@ def main():
     transport = streaming_collision_operators(
         space, angles, MATERIALS
     )  # Omega.nabla + sigma_t
-    incident = incident_flux_sources(space, angles)  # boundary inflow, per direction
     scattering = scattering_operator(space, MATERIALS)  # phi -> sigma_s * phi
 
     ####### Create sweep cell ordering #######
@@ -89,9 +89,23 @@ def main():
     phi = np.zeros(space.GetNDofs())  # scalar flux
     psi = [mfem.Vector(space.GetNDofs()) for _ in angles]  # angular flux, per direction
 
+    # Incoming-flux boundary term per direction (constant across iterations)
+    inflow = []
+    for omega, coeff in zip(angles, bc[0]):  # bc[group][angle]
+        b = mfem.LinearForm(space)
+        b.AddBdrFaceIntegrator(
+            mfem.BoundaryFlowIntegrator(
+                coeff, mfem.VectorConstantCoefficient(omega), -1.0
+            )
+        )
+        b.Assemble()
+        inflow.append(b)
+    rhs = [mfem.LinearForm(space) for _ in angles]
+
     for iteration in range(1, MAX_ITERATIONS + 1):
         q = scattering_source(scattering, phi)
-        rhs = [mfem.Vector(inflow + q) for inflow in incident]
+        for b_in, r in zip(inflow, rhs):
+            r.Assign(b_in.GetDataArray() + q)
 
         ################## Sweep #################
         sweeper.sweep(transport, rhs, out=psi)
@@ -143,26 +157,6 @@ def streaming_collision_operators(space, angles, materials):
         L.Assemble()
         operators.append(L)
     return operators
-
-
-def incident_flux_sources(space, angles):
-    """For each direction, the source vector from flux entering through the boundary.
-
-    Directions with Omega_x > 0 carry INCIDENT_FLUX wherever they enter the domain;
-    all other directions enter with zero flux.
-    """
-    sources = []
-    for omega in angles:
-        flux = mfem.ConstantCoefficient(INCIDENT_FLUX if omega[0] > 0 else 0.0)
-        b = mfem.LinearForm(space)
-        b.AddBdrFaceIntegrator(
-            mfem.BoundaryFlowIntegrator(
-                flux, mfem.VectorConstantCoefficient(omega), -1.0
-            )
-        )
-        b.Assemble()
-        sources.append(b.GetDataArray().copy())
-    return sources
 
 
 def scattering_operator(space, materials):
