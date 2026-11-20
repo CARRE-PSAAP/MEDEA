@@ -165,12 +165,9 @@ def incident_flux_sources(space, angles):
 
 def scattering_operator(space, materials):
     """Matrix that turns the scalar flux into the isotropic scattering source,
-    q = sigma_s * phi / 4pi, weighted by the finite-element basis."""
-    sigma_s = mfem.ProductCoefficient(
-        1 / (4 * np.pi), materials.xs_scatter[0,0].to_PWConst()
-    )
+    q = sigma_s * phi, weighted by the finite-element basis."""
     S = mfem.BilinearForm(space)
-    S.AddDomainIntegrator(mfem.MassIntegrator(sigma_s))
+    S.AddDomainIntegrator(mfem.MassIntegrator(materials.xs_scatter[0,0].to_PWConst()))
     S.Assemble()
     S.Finalize()
     return S
