@@ -22,6 +22,9 @@ from pathlib import Path
 import numpy as np
 
 from medea import Material, MaterialGroup, TransportSweep, mfem
+import medea
+from medea import mfem
+from medea.quadrature import level_symmetric
 
 DATA = Path(__file__).resolve().parent / "data"
 
@@ -62,7 +65,10 @@ def main():
     mesh = mfem.Mesh(str(DATA / mesh_file))
     MATERIALS.check_mesh(mesh)  # every mesh attribute must have a material
 
-    angles, weights = s6_quadrature()
+
+    quad = level_symmetric(6, dim=2)
+    angles = quad.angles
+    weights = quad.weights
 
     fec = mfem.DG_FECollection(DG_ORDER, 2, mfem.BasisType.GaussLobatto)
     space = mfem.FiniteElementSpace(mesh, fec)  # vector of unknowns
@@ -106,25 +112,6 @@ def main():
 
 
 # ------------------------------------------------------------------ algorithm steps --
-
-
-def s6_quadrature():
-    """Level-symmetric S6 in 2D: 24 directions (unit cosines mu, eta), weights sum to 1."""
-    mu_eta = [  # first quadrant
-        (0.2666355, 0.2666355),
-        (0.2666355, 0.6815076),
-        (0.2666355, 0.9261808),
-        (0.6815076, 0.2666355),
-        (0.6815076, 0.6815076),
-        (0.9261808, 0.2666355),
-    ]
-    w = [0.1761263, 0.1572071, 0.1761263, 0.1572071, 0.1572071, 0.1761263]
-    angles, weights = [], []
-    for sx, sy in [(1, 1), (-1, 1), (1, -1), (-1, -1)]:  # reflect into all quadrants
-        for (mu, eta), wk in zip(mu_eta, w):
-            angles.append(mfem.Vector([sx * mu, sy * eta]))
-            weights.append(wk)
-    return angles, np.array(weights) / sum(weights)
 
 
 def streaming_collision_operators(space, angles, materials):
@@ -178,12 +165,9 @@ def incident_flux_sources(space, angles):
 
 def scattering_operator(space, materials):
     """Matrix that turns the scalar flux into the isotropic scattering source,
-    q = sigma_s * phi / 4pi, weighted by the finite-element basis."""
-    sigma_s = mfem.ProductCoefficient(
-        1 / (4 * np.pi), materials.xs_scatter[0, 0].to_PWConst()
-    )
+    q = sigma_s * phi, weighted by the finite-element basis."""
     S = mfem.BilinearForm(space)
-    S.AddDomainIntegrator(mfem.MassIntegrator(sigma_s))
+    S.AddDomainIntegrator(mfem.MassIntegrator(materials.xs_scatter[0,0].to_PWConst()))
     S.Assemble()
     S.Finalize()
     return S
