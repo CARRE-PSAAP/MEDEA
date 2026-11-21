@@ -1,4 +1,3 @@
-import copy
 import warnings
 
 import numpy as np
@@ -89,17 +88,6 @@ class Material:
         """Scattering cross section, shape ``(n_groups, n_groups)``."""
         return self._data["xs_scatter"]
 
-    @property
-    def shapes(self):
-        """:return: ``{property: shape}`` for this material, e.g. ``{"xs_total": (2,)}``"""
-        return {p: a.shape for p, a in self._data.items()}
-
-    def replace(self, **properties):
-        # Return a new ``Material`` (same name) with some properties changed or added.
-        return Material(
-            self._name, n_groups=self._n_groups, **{**self._data, **properties}
-        )
-
     def __getitem__(self, prop):
         try:
             return self._data[prop]
@@ -111,18 +99,6 @@ class Material:
 
     def __iter__(self):
         return iter(self._data)
-
-    def __len__(self):
-        return len(self._data)
-
-    def __contains__(self, prop):
-        return prop in self._data
-
-    def keys(self):
-        return self._data.keys()
-
-    def items(self):
-        return self._data.items()
 
     def __repr__(self):
         return f"Material({self._name!r}, properties={list(self._data)})"
@@ -140,9 +116,6 @@ class MaterialProperty:
     * ``str``: the data for that material.
     * ``int``, ``slice``, ``Ellipsis``, or a tuple of them: index the non-material
       axes and return a new view, so ``v[i][j] == v[i, j]``.
-
-    Iteration, ``in``, ``keys()``, ``items()`` and ``len()`` run over material
-    names. (Not a ``Mapping``: non-string keys index axes, not materials.)
     """
 
     def __init__(self, array, coefficients, names, index):
@@ -155,23 +128,6 @@ class MaterialProperty:
     def array(self):
         """The underlying ``(M, *shape)`` array (read-only)."""
         return self._array
-
-    @property
-    def shape(self):
-        """Shape of the data for a single material (material axis excluded)."""
-        return self._array.shape[1:]
-
-    def __iter__(self):
-        return iter(self._names)
-
-    def __len__(self):
-        return len(self._names)
-
-    def keys(self):
-        return self._names
-
-    def items(self):
-        return ((n, self[n]) for n in self._names)
 
     def __getitem__(self, key):
         if isinstance(key, str):
@@ -194,13 +150,13 @@ class MaterialProperty:
     def to_PWConst(self):
         """Return the ``mfem.PWConstCoefficient`` object(s) for this property.
 
-        Returns an object array of shape ``self.shape`` whose elements are
-        coefficients taking, on each mesh attribute, that element's value for the
-        material mapped to it (0 for unmapped attributes). A scalar view
-        (``shape == ()``) returns the single coefficient instead.
+        Returns an object array, with the shape of one material's data, whose elements
+        are coefficients taking, on each mesh attribute, that element's value for the
+        material mapped to it (0 for unmapped attributes). A fully indexed view
+        (a single value per material) returns the single coefficient instead.
 
-        The coefficients are built once, when the :class:`MaterialGroup` is created
-        (or remapped); this only hands them out, so repeated calls return the same
+        The coefficients are built once, when the :class:`MaterialGroup` is created;
+        this only hands them out, so repeated calls return the same
         coefficient objects.
         """
         if self._coefficients.ndim == 0:
@@ -208,7 +164,10 @@ class MaterialProperty:
         return self._coefficients.copy()  # new container, same coefficients
 
     def __repr__(self):
-        return f"MaterialProperty(shape={self.shape}, materials={list(self._names)})"
+        return (
+            f"MaterialProperty(shape={self._array.shape[1:]}, "
+            f"materials={list(self._names)})"
+        )
 
 
 class MaterialGroup:
@@ -243,8 +202,6 @@ class MaterialGroup:
                             #   "SiO2": np.ndarray([1.5])}
 
         mats["xs_total"][0].to_PWConst() # mfem.PWConstCoeff(mfem.Vector(1.0, 1.5))
-
-        mats = mats.remap({1: "SiO2", 2: "Al"}) # switches mapping of the two materials
 
     Use :meth:`.check_mesh` and :meth:`.require` to validate a material group for use
     in a method.
@@ -391,31 +348,6 @@ class MaterialGroup:
             data, self._coefficients[prop], self._names, self._index
         )
 
-    def __iter__(self):
-        return iter(self._data)
-
-    def __len__(self):
-        return len(self._data)
-
-    @property
-    def materials(self):
-        """The :class:`Material` objects, in input order."""
-        return self._materials
-
-    @property
-    def names(self):
-        """Material names, in input order."""
-        return self._names
-
-    @property
-    def properties(self):
-        """
-        Property names shared by every material.
-
-        :return: ``tuple[str]``
-        """
-        return tuple(self._data)
-
     @property
     def n_groups(self):
         """Number of energy groups (shared by every material)."""
@@ -435,15 +367,6 @@ class MaterialGroup:
     def attributes(self):
         """``{mesh_attribute: material_name}``, sorted by attribute."""
         return dict(self._attributes)
-
-    def material(self, name):
-        """The :class:`Material` called ``name``."""
-        try:
-            return self._materials[self._index[name]]
-        except KeyError:
-            raise KeyError(
-                f"unknown material {name!r}; materials are {list(self._names)}"
-            ) from None
 
     def require(self, *properties, **shapes):
         """Raise ``ValueError`` unless the data suits a method.
@@ -479,16 +402,6 @@ class MaterialGroup:
                     f"property {prop!r} has shape {actual} for each material, "
                     f"expected {expected} (n_groups={self._n_groups})"
                 )
-
-    def remap(self, attributes):
-        """Return a new :class:`MaterialGroup` with a different attribute map.
-
-        ``attributes`` follows the constructor's rules. Data arrays are shared,
-        not copied, and this object is unchanged.
-        """
-        new = copy.copy(self)
-        new._set_attributes(attributes)
-        return new
 
     def check_mesh(self, mesh):
         """Raise ``ValueError`` if ``mesh`` has attributes with no assigned material."""

@@ -4,8 +4,7 @@ Tests are organised around how the class is used, not around lines of code:
 
 * a non-transport user builds it from plain dicts and gets clear errors,
 * data is stored safely (inputs copied, outputs read-only),
-* a methods developer slices data at any level and converts to MFEM,
-* the attribute map can be swapped without touching the data.
+* a methods developer slices data at any level and converts to MFEM.
 """
 
 import warnings
@@ -72,19 +71,13 @@ def strip_mesh(attrs):
 
 def test_default_attributes_follow_dict_order(mats):
     assert mats.attributes == {1: "fuel", 2: "mod"}
-    assert mats.names == ("fuel", "mod")
-
-
-def test_properties_are_discoverable(mats):
-    assert list(mats) == ["xs_total", "xs_scatter", "moments", "temp"]
-    assert len(mats) == 4
 
 
 def test_accepts_lists_scalars_and_arrays_of_any_shape(mats):
-    assert mats["temp"].shape == ()
-    assert mats["xs_total"].shape == (2,)
-    assert mats["xs_scatter"].shape == (2, 2)
-    assert mats["moments"].shape == (2, 2, 2)
+    assert mats["temp"].array.shape == (2,)
+    assert mats["xs_total"].array.shape == (2, 2)
+    assert mats["xs_scatter"].array.shape == (2, 2, 2)
+    assert mats["moments"].array.shape == (2, 2, 2, 2)
     assert mats["xs_total"].array.dtype == np.float64
 
 
@@ -122,9 +115,7 @@ def test_inconsistent_materials_rejected_with_useful_message(materials, match):
 
 def test_error_names_the_offending_material_and_property():
     with pytest.raises(ValueError) as e:
-        MaterialGroup.from_dict(
-            {"good": core(sig=[1.0]), "bad": core(sig=[1.0, 2.0])}
-        )
+        MaterialGroup.from_dict({"good": core(sig=[1.0]), "bad": core(sig=[1.0, 2.0])})
     assert "bad" in str(e.value) and "sig" in str(e.value)
 
 
@@ -185,29 +176,7 @@ def test_empty_attribute_map_rejected():
 def test_no_warning_when_every_material_is_assigned(mats):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        MaterialGroup.from_dict(
-            {"a": core(), "b": core()}, attributes={5: "a", 6: "b"}
-        )
-
-
-def test_remap_without_copying_or_mutating(mats):
-    swapped = mats.remap({1: "mod", 2: "fuel"})
-    assert swapped.attributes == {1: "mod", 2: "fuel"}
-    assert mats.attributes == {1: "fuel", 2: "mod"}  # original untouched
-    assert np.shares_memory(swapped["xs_total"].array, mats["xs_total"].array)
-
-    mesh = strip_mesh([1, 2])
-    old = mats["xs_total"][0].to_PWConst()
-    new = swapped["xs_total"][0].to_PWConst()
-    assert [eval_on(old, mesh, e) for e in (0, 1)] == [1.0, 3.0]
-    assert [eval_on(new, mesh, e) for e in (0, 1)] == [3.0, 1.0]
-
-
-def test_remap_validates_like_the_constructor(mats):
-    with pytest.raises(ValueError, match="unknown materials"):
-        mats.remap({1: "nope"})
-    with pytest.raises(ValueError, match="positive integers"):
-        mats.remap({0: "fuel"})
+        MaterialGroup.from_dict({"a": core(), "b": core()}, attributes={5: "a", 6: "b"})
 
 
 def test_attributes_property_is_a_copy(mats):
@@ -227,28 +196,16 @@ def test_check_mesh_reports_unmapped_mesh_attributes(mats):
 # -- indexing: the "any level" access methods developers rely on -------------------
 
 
-def test_view_is_dict_like_over_material_names(mats):
+def test_view_looks_up_data_by_material_name(mats):
     v = mats["xs_total"]
-    assert list(v) == ["fuel", "mod"]
-    assert list(v.keys()) == ["fuel", "mod"]
-    assert len(v) == 2
-    assert "fuel" in v and "water" not in v
+    np.testing.assert_array_equal(v["fuel"], [1.0, 2.0])
     np.testing.assert_array_equal(v["mod"], [3.0, 4.0])
-    assert {k: x.tolist() for k, x in v.items()} == {
-        "fuel": [1.0, 2.0],
-        "mod": [3.0, 4.0],
-    }
-
-
-def test_view_converts_to_a_plain_dict(mats):
-    d = dict(mats["xs_total"][0])
-    assert d == {"fuel": 1.0, "mod": 3.0}
 
 
 def test_integer_index_selects_leading_non_material_axis(mats):
     v = mats["xs_total"][1]
-    assert v.shape == ()
-    assert dict(v) == {"fuel": 2.0, "mod": 4.0}
+    assert v.array.shape == (2,)
+    assert v["fuel"] == 2.0 and v["mod"] == 4.0
 
 
 def test_chained_and_tuple_indexing_agree(mats):
@@ -261,8 +218,8 @@ def test_chained_and_tuple_indexing_agree(mats):
 
 def test_slice_and_ellipsis_indexing_keep_material_axis_first(mats):
     s = mats["moments"]
-    assert s[:, 0].shape == (2, 2)
-    assert s[..., 1].shape == (2, 2)
+    assert s[:, 0].array.shape == (2, 2, 2)
+    assert s[..., 1].array.shape == (2, 2, 2)
     np.testing.assert_array_equal(s[..., 1]["mod"], MOMENTS_B[..., 1])
     np.testing.assert_array_equal(s[0, :, 1]["fuel"], MOMENTS_A[0, :, 1])
 
@@ -338,13 +295,6 @@ def test_unmapped_attribute_gets_zero_inside_mapped_range():
     assert [eval_on(c, mesh, e) for e in range(3)] == [5.0, 0.0, 6.0]
 
 
-def test_conversion_is_a_snapshot_of_the_attribute_map(mats):
-    """Coefficients made before remap keep the old mapping."""
-    c = mats["xs_total"][0].to_PWConst()
-    mats.remap({1: "mod", 2: "fuel"})
-    assert eval_on(c, strip_mesh([1]), 0) == 1.0
-
-
 def test_single_material_problem():
     m = MaterialGroup.from_dict(
         {"only": {"xs_total": [2.0, 3.0], "xs_scatter": np.zeros((2, 2))}}, n_groups=2
@@ -380,9 +330,7 @@ def test_material_stores_name_and_read_only_float_data():
     src[0] = 99
     assert m.name == "fuel" and m.n_groups == 2
     assert m["xs_total"].dtype == np.float64 and m["xs_total"][0] == 1.0
-    assert m.shapes == {"xs_total": (2,), "xs_scatter": (2, 2), "temp": ()}
     assert list(m) == ["xs_total", "xs_scatter", "temp"]
-    assert "temp" in m and len(m) == 3
     with pytest.raises(ValueError):
         m["xs_total"][0] = 5.0
 
@@ -445,31 +393,14 @@ def test_material_unknown_property_names_the_material():
         mk("a")["y"]
 
 
-def test_replace_returns_a_new_material_and_leaves_the_original():
-    a = mk("a", y=2.0)
-    b = a.replace(xs_total=[5.0], z=7.0)
-    assert b.name == "a" and b.xs_total[0] == 5.0 and b["y"] == 2.0 and b["z"] == 7.0
-    assert b.n_groups == 1
-    assert a.xs_total[0] == 1.0 and "z" not in a
-
-
-def test_replace_keeps_n_groups_and_revalidates():
-    a = mk("a", G=2)
-    assert a.replace(xs_total=[3.0, 4.0]).n_groups == 2
-    with pytest.raises(ValueError, match="expected"):
-        a.replace(xs_total=[3.0])
-
-
 # -- MaterialGroup built from Material objects ---------------------------------------------
 
 
 def test_group_takes_materials_as_positional_arguments():
     a, b = mk("a", x=1.0), mk("b", x=2.0)
     g = MaterialGroup(a, b)
-    assert g.names == ("a", "b") and g.materials == (a, b)
     assert g.attributes == {1: "a", 2: "b"}
-    assert g.material("b") is b
-    assert g.properties == ("xs_total", "xs_scatter", "x")
+    np.testing.assert_array_equal(g["x"].array, [1.0, 2.0])
 
 
 def test_attributes_accept_material_objects_and_names():
@@ -503,17 +434,12 @@ def test_required_cross_sections_are_group_attributes(mats):
     assert isinstance(mats.xs_total, MaterialProperty)
     np.testing.assert_array_equal(mats.xs_total.array, mats["xs_total"].array)
     np.testing.assert_array_equal(mats.xs_scatter["mod"], SCATTER_B)
-    assert mats.xs_scatter.shape == (2, 2)
+    assert mats.xs_scatter.array.shape == (2, 2, 2)
 
 
 def test_materials_in_a_group_must_share_n_groups():
     with pytest.raises(ValueError, match="'b' has n_groups=2.*'a' has n_groups=1"):
         MaterialGroup(mk("a"), mk("b", G=2))
-
-
-def test_group_material_lookup_error_lists_materials(mats):
-    with pytest.raises(KeyError, match="unknown material 'water'.*fuel"):
-        mats.material("water")
 
 
 def test_require_checks_properties(mats):
@@ -522,11 +448,10 @@ def test_require_checks_properties(mats):
         mats.require("xs_total", "nope")
 
 
-def test_n_groups_is_inferred_and_survives_remap(mats):
+def test_n_groups_is_inferred(mats):
     assert mats.n_groups == 2
     one = MaterialGroup(mk("a"))
     assert one.n_groups == 1
-    assert mats.remap({1: "fuel"}).n_groups == 2
     assert "n_groups=2" in repr(mats)
 
 
@@ -545,7 +470,9 @@ def test_require_checks_shapes_against_n_groups(mats):
     G = mats.n_groups
     mats.require("temp", xs_total=(G,), xs_scatter=(G, G))
     mats.require(xs_total=G, temp=())  # ints are one-dimensional shapes
-    with pytest.raises(ValueError, match=r"'xs_scatter'.*\(2, 2\).*expected \(2, 2, 2\)"):
+    with pytest.raises(
+        ValueError, match=r"'xs_scatter'.*\(2, 2\).*expected \(2, 2, 2\)"
+    ):
         mats.require(xs_scatter=(G, G, 2))
 
 
@@ -561,11 +488,11 @@ def test_require_reports_missing_keyword_properties():
         mats.require(nope=(1,))
 
 
-def test_group_does_not_alias_its_material_data(mats):
-    assert isinstance(mats["xs_total"], MaterialProperty)
-    assert not np.shares_memory(
-        mats["xs_total"].array, mats.material("fuel")["xs_total"]
-    )
+def test_group_does_not_alias_its_material_data():
+    a = mk("a")
+    g = MaterialGroup(a)
+    assert isinstance(g["xs_total"], MaterialProperty)
+    assert not np.shares_memory(g["xs_total"].array, a["xs_total"])
 
 
 # -- coefficients are cached at construction ----------------------------------------------
@@ -584,11 +511,3 @@ def test_mutating_returned_container_does_not_poison_cache(mats):
     c = mats["xs_total"].to_PWConst()
     c[0] = None
     assert mats["xs_total"].to_PWConst()[0] is not None
-
-
-def test_remap_rebuilds_coefficients_and_leaves_the_original_cache(mats):
-    swapped = mats.remap({1: "mod", 2: "fuel"})
-    assert swapped["temp"].to_PWConst() is not mats["temp"].to_PWConst()
-    mesh = strip_mesh([1])
-    assert eval_on(mats["temp"].to_PWConst(), mesh, 0) == 300.0
-    assert eval_on(swapped["temp"].to_PWConst(), mesh, 0) == 400.0
